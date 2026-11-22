@@ -1,0 +1,105 @@
+<Window x:Class="RecipeTreeApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RecipeTreeApp"
+        Title="PO3 Mythic Recipe Tree 🌸" Height="860" Width="1320"
+        Background="{DynamicResource WindowBg}" WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI">
+    
+    <Window.Resources>
+        <!-- Dark theme (default) -->
+        <SolidColorBrush x:Key="WindowBg" Color="#1E1E2E"/>
+        <SolidColorBrush x:Key="PanelBg" Color="#313244"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#CDD6F4"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#A6ADC8"/>
+        <SolidColorBrush x:Key="Accent" Color="#CBA6F7"/>
+        <SolidColorBrush x:Key="ButtonBg" Color="#89B4FA"/>
+        <SolidColorBrush x:Key="SuccessBg" Color="#A6E3A1"/>
+        <SolidColorBrush x:Key="Highlight" Color="#F9E2AF"/>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top controls -->
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+            <TextBlock Text="Item:" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" Margin="0,0,8,0"/>
+            <TextBox x:Name="ItemInput" Width="240" Height="34" FontSize="15"
+                     VerticalContentAlignment="Center" Text="diamond" Margin="0,0,16,0"/>
+
+            <TextBlock Text="Quantity:" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" Margin="0,0,8,0"/>
+            <TextBox x:Name="QuantityInput" Width="70" Height="34" FontSize="15"
+                     VerticalContentAlignment="Center" Text="1" Margin="0,0,16,0"/>
+
+            <Button Content="Build Tree ✨" Width="130" Height="34" Click="BuildTree_Click"
+                    Background="{DynamicResource Accent}" Foreground="#1E1E2E" FontWeight="Bold" Margin="0,0,10,0"/>
+            
+            <Button Content="Expand All" Width="100" Height="34" Click="ExpandAll_Click"
+                    Background="{DynamicResource ButtonBg}" Margin="0,0,8,0"/>
+            <Button Content="Collapse All" Width="100" Height="34" Click="CollapseAll_Click"
+                    Background="{DynamicResource ButtonBg}"/>
+        </StackPanel>
+
+        <!-- Search + Export + Theme row -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+            <TextBlock Text="Filter:" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" Margin="0,0,8,0"/>
+            <TextBox x:Name="FilterBox" Width="240" Height="32" FontSize="14"
+                     VerticalContentAlignment="Center" TextChanged="FilterBox_TextChanged"
+                     ToolTip="Type to highlight matching nodes"/>
+            
+            <Button Content="📋 Copy Text" Width="110" Height="32" Margin="16,0,8,0"
+                    Click="CopyText_Click" Background="{DynamicResource SuccessBg}" Foreground="#1E1E2E"/>
+            <Button Content="💾 Save .txt" Width="110" Height="32" Margin="0,0,8,0"
+                    Click="SaveTxt_Click" Background="{DynamicResource SuccessBg}" Foreground="#1E1E2E"/>
+            <Button Content="🖼️ Save PNG" Width="110" Height="32" Margin="0,0,16,0"
+                    Click="SavePng_Click" Background="{DynamicResource SuccessBg}" Foreground="#1E1E2E"/>
+
+            <Button x:Name="ThemeButton" Content="☀️ Light Mode" Width="130" Height="32"
+                    Click="ToggleTheme_Click" Background="#F5C2E7" Foreground="#1E1E2E"/>
+        </StackPanel>
+
+        <!-- Main content area -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.1*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: TreeView -->
+            <Border Grid.Column="0" Background="{DynamicResource PanelBg}" CornerRadius="10" Padding="10">
+                <TreeView x:Name="RecipeTreeView" Background="Transparent" 
+                          Foreground="{DynamicResource TextPrimary}"
+                          FontSize="14" BorderThickness="0">
+                    <TreeView.Resources>
+                        <HierarchicalDataTemplate DataType="{x:Type local:RecipeNode}"
+                                                  ItemsSource="{Binding Children}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding QuantityText}" 
+                                           Foreground="{DynamicResource TextSecondary}" Margin="8,0,0,0"/>
+                            </StackPanel>
+                        </HierarchicalDataTemplate>
+                    </TreeView.Resources>
+                </TreeView>
+            </Border>
+
+            <!-- Right: Pretty bracket tree -->
+            <Border Grid.Column="2" Background="{DynamicResource PanelBg}" CornerRadius="10" Padding="10">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                    <TextBox x:Name="BracketOutput" IsReadOnly="True" Background="Transparent"
+                             Foreground="{DynamicResource TextPrimary}" FontFamily="Consolas" FontSize="13.5"
+                             BorderThickness="0" TextWrapping="NoWrap" AcceptsReturn="True"/>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <TextBlock Grid.Row="3" Margin="0,12,0,0" Foreground="{DynamicResource TextSecondary}" FontSize="13"
+                   Text="Tip: Add more recipes to recipes.json • Filter highlights matching nodes • Quantity multiplies the whole tree 💕"/>
+    </Grid>
+</Window>

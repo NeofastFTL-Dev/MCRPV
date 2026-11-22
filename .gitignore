@@ -1,0 +1,25 @@
+# ---- .NET / WPF ----
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# ---- Build output ----
+dist/
+*.exe
+*.dll
+*.pdb
+*.zip
+
+# ---- Local logs ----
+*.log
+
+# ---- Editor / OS junk ----
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

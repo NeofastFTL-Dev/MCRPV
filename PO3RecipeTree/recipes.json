@@ -1,0 +1,34 @@
+{
+  "diamond": {
+    "Ingredients": [
+      { "Item": "diamond_ore", "Count": 1 }
+    ]
+  },
+  "diamond_ore": {
+    "Ingredients": [
+      { "Item": "cobblestone", "Count": 8 },
+      { "Item": "diamond_gem", "Count": 1 }
+    ]
+  },
+  "iron_ingot": {
+    "Ingredients": [
+      { "Item": "iron_ore", "Count": 1 }
+    ]
+  },
+  "iron_pickaxe": {
+    "Ingredients": [
+      { "Item": "iron_ingot", "Count": 3 },
+      { "Item": "stick", "Count": 2 }
+    ]
+  },
+  "stick": {
+    "Ingredients": [
+      { "Item": "plank", "Count": 2 }
+    ]
+  },
+  "plank": {
+    "Ingredients": [
+      { "Item": "log", "Count": 1 }
+    ]
+  }
+}
