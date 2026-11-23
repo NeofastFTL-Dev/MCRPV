@@ -2,104 +2,555 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Mcrpv"
-        Title="MCRPV — Minecraft Recipe Tree Viewer" Height="860" Width="1320"
-        Background="{DynamicResource WindowBg}" WindowStartupLocation="CenterScreen"
-        FontFamily="Segoe UI">
-    
+        Title="{local:Tr main.title}" Height="920" Width="1440"
+        MinHeight="660" MinWidth="1024"
+        Background="{DynamicResource WindowBg}" Foreground="{DynamicResource TextPrimary}"
+        WindowStartupLocation="CenterScreen" FontFamily="Consolas"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
+
     <Window.Resources>
-        <!-- Dark theme (default) -->
-        <SolidColorBrush x:Key="WindowBg" Color="#1E1E2E"/>
-        <SolidColorBrush x:Key="PanelBg" Color="#313244"/>
-        <SolidColorBrush x:Key="TextPrimary" Color="#CDD6F4"/>
-        <SolidColorBrush x:Key="TextSecondary" Color="#A6ADC8"/>
-        <SolidColorBrush x:Key="Accent" Color="#CBA6F7"/>
-        <SolidColorBrush x:Key="ButtonBg" Color="#89B4FA"/>
-        <SolidColorBrush x:Key="SuccessBg" Color="#A6E3A1"/>
-        <SolidColorBrush x:Key="Highlight" Color="#F9E2AF"/>
+        <HierarchicalDataTemplate DataType="{x:Type local:RecipeNode}" ItemsSource="{Binding Children}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding QuantityText}" Foreground="{DynamicResource ScreenDim}" Margin="8,0,0,0"/>
+            </StackPanel>
+        </HierarchicalDataTemplate>
     </Window.Resources>
 
-    <Grid Margin="16">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Grid>
+        <!-- Achtergrondgloed achter het paneel, zoals het scherm van de machine -->
+        <Rectangle>
+            <Rectangle.Fill>
+                <RadialGradientBrush Center="0.5,0.02" GradientOrigin="0.5,0.02" RadiusX="1.15" RadiusY="1.15">
+                    <GradientStop Offset="0" Color="#2A8E6BC8"/>
+                    <GradientStop Offset="1" Color="#00000000"/>
+                </RadialGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
 
-        <!-- Top controls -->
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-            <TextBlock Text="Item:" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" Margin="0,0,8,0"/>
-            <TextBox x:Name="ItemInput" Width="240" Height="34" FontSize="15"
-                     VerticalContentAlignment="Center" Text="diamond" Margin="0,0,16,0"/>
+        <Grid Margin="14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-            <TextBlock Text="Quantity:" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" Margin="0,0,8,0"/>
-            <TextBox x:Name="QuantityInput" Width="70" Height="34" FontSize="15"
-                     VerticalContentAlignment="Center" Text="1" Margin="0,0,16,0"/>
+            <!-- ===== Titelbalk ===== -->
+            <ContentControl Grid.Row="0" Style="{StaticResource McPanel}" Padding="10,7" Margin="0,0,0,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-            <Button Content="Build Tree ✨" Width="130" Height="34" Click="BuildTree_Click"
-                    Background="{DynamicResource Accent}" Foreground="#1E1E2E" FontWeight="Bold" Margin="0,0,10,0"/>
-            
-            <Button Content="Expand All" Width="100" Height="34" Click="ExpandAll_Click"
-                    Background="{DynamicResource ButtonBg}" Margin="0,0,8,0"/>
-            <Button Content="Collapse All" Width="100" Height="34" Click="CollapseAll_Click"
-                    Background="{DynamicResource ButtonBg}"/>
-        </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ContentControl Style="{StaticResource McInset}" Padding="7,4" Margin="0,0,12,0">
+                            <TextBlock Text="🌸" FontSize="15"/>
+                        </ContentControl>
+                        <StackPanel>
+                            <TextBlock Text="MODDED MC RECIPE VIEWER TREE" FontWeight="Bold" FontSize="15"
+                                       Foreground="{DynamicResource TextPrimary}"/>
+                            <TextBlock Text="recipe crafting terminal · modded minecraft packs · forge &amp; fabric"
+                                       FontSize="10" Foreground="{DynamicResource TextSecondary}"/>
+                        </StackPanel>
+                    </StackPanel>
 
-        <!-- Search + Export + Theme row -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
-            <TextBlock Text="Filter:" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" Margin="0,0,8,0"/>
-            <TextBox x:Name="FilterBox" Width="240" Height="32" FontSize="14"
-                     VerticalContentAlignment="Center" TextChanged="FilterBox_TextChanged"
-                     ToolTip="Type to highlight matching nodes"/>
-            
-            <Button Content="📋 Copy Text" Width="110" Height="32" Margin="16,0,8,0"
-                    Click="CopyText_Click" Background="{DynamicResource SuccessBg}" Foreground="#1E1E2E"/>
-            <Button Content="💾 Save .txt" Width="110" Height="32" Margin="0,0,8,0"
-                    Click="SaveTxt_Click" Background="{DynamicResource SuccessBg}" Foreground="#1E1E2E"/>
-            <Button Content="🖼️ Save PNG" Width="110" Height="32" Margin="0,0,16,0"
-                    Click="SavePng_Click" Background="{DynamicResource SuccessBg}" Foreground="#1E1E2E"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="◀" FontSize="10" Foreground="{DynamicResource TextSecondary}" Margin="0,1,8,0"/>
+                        <TextBlock Text="1/1" FontWeight="Bold" FontSize="12.5" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="▶" FontSize="10" Foreground="{DynamicResource TextSecondary}" Margin="8,1,0,0"/>
+                    </StackPanel>
 
-            <Button x:Name="ThemeButton" Content="☀️ Light Mode" Width="130" Height="32"
-                    Click="ToggleTheme_Click" Background="#F5C2E7" Foreground="#1E1E2E"/>
-        </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="ChangesButton" Content="{local:Tr nav.changes}" Width="152" Height="32" Margin="0,0,8,0"
+                                Style="{StaticResource McButtonSteel}" Click="ShowChanges_Click"
+                                ToolTip="{local:Tr nav.changes.tip}"/>
+                        <Button x:Name="PreferenceButton" Content="{local:Tr nav.prefs}" Width="146" Height="32" Margin="0,0,8,0"
+                                Style="{StaticResource McButtonSteel}" Click="ShowPreferences_Click"
+                                ToolTip="{local:Tr nav.prefs.tip}"/>
+                        <TextBlock x:Name="VersionText" Text="v…" FontSize="10.5" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondary}" Margin="0,0,10,0"/>
+                        <Button x:Name="ThemeButton" Content="☀️ Light Mode" Width="150" Height="32"
+                                Style="{StaticResource McButtonSteel}" Click="ToggleTheme_Click"
+                                ToolTip="{local:Tr nav.theme.tip}"/>
+                    </StackPanel>
+                </Grid>
+            </ContentControl>
 
-        <!-- Main content area -->
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.1*"/>
-                <ColumnDefinition Width="12"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+            <!-- ===== Hoofdpaneel met tab-rail ===== -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-            <!-- Left: TreeView -->
-            <Border Grid.Column="0" Background="{DynamicResource PanelBg}" CornerRadius="10" Padding="10">
-                <TreeView x:Name="RecipeTreeView" Background="Transparent" 
-                          Foreground="{DynamicResource TextPrimary}"
-                          FontSize="14" BorderThickness="0">
-                    <TreeView.Resources>
-                        <HierarchicalDataTemplate DataType="{x:Type local:RecipeNode}"
-                                                  ItemsSource="{Binding Children}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
-                                <TextBlock Text="{Binding QuantityText}" 
-                                           Foreground="{DynamicResource TextSecondary}" Margin="8,0,0,0"/>
+                <!-- Verticale tabs, zoals de tab-strip van de crafting terminal -->
+                <StackPanel Grid.Column="0" VerticalAlignment="Top">
+                    <ContentControl Style="{StaticResource McInset}" Height="58" Margin="0,0,0,8">
+                        <TextBlock Text="⚙" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource ScreenDim}"/>
+                    </ContentControl>
+
+                    <Button x:Name="TreeViewButton" Style="{StaticResource McTab}" Height="58"
+                            Click="ShowTree_Click" ToolTip="{local:Tr tab.tree.tip}">
+                        <StackPanel>
+                            <TextBlock Text="🌳" FontSize="19" HorizontalAlignment="Center"/>
+                            <TextBlock Text="TREE" FontSize="9" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="PlanViewButton" Style="{StaticResource McTab}" Height="58"
+                            Click="ShowPlan_Click" ToolTip="{local:Tr tab.plan.tip}">
+                        <StackPanel>
+                            <TextBlock Text="📋" FontSize="19" HorizontalAlignment="Center"/>
+                            <TextBlock Text="PLAN" FontSize="9" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="ShoppingViewButton" Style="{StaticResource McTab}" Height="58"
+                            Click="BuildShoppingList_Click" ToolTip="{local:Tr tab.list.tip}">
+                        <StackPanel>
+                            <TextBlock Text="🛒" FontSize="19" HorizontalAlignment="Center"/>
+                            <TextBlock Text="LIST" FontSize="9" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BracketTabButton" Style="{StaticResource McTab}" Height="58"
+                            Click="ShowBracket_Click" ToolTip="{local:Tr tab.bracket.tip}">
+                        <StackPanel>
+                            <TextBlock Text="🧩" FontSize="19" HorizontalAlignment="Center"/>
+                            <TextBlock Text="BRACKET" FontSize="8" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <ContentControl Grid.Column="2" Style="{StaticResource McPanel}" Padding="10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Paneelkop -->
+                        <ContentControl x:Name="CraftHeaderPanel" Grid.Row="0" Style="{StaticResource McHeader}" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="RECIPE CRAFTING" Style="{StaticResource McHeaderText}"/>
+                                <TextBlock Grid.Column="1" Text="{local:Tr main.subtitle}" FontSize="9.5" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0,0,0"
+                                           Foreground="{DynamicResource TextSecondary}"/>
+                            </Grid>
+                        </ContentControl>
+
+                        <!-- Item + aantal + bouwen -->
+                        <Grid x:Name="CraftInputRow" Grid.Row="1" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="🧱 ITEM" Style="{StaticResource McLabel}"/>
+                                <TextBox x:Name="ItemInput" Style="{StaticResource McTextBox}"
+                                         Width="260" Height="38" FontSize="14" Text="diamond"
+                                         ToolTip="{local:Tr tip.item}"/>
                             </StackPanel>
-                        </HierarchicalDataTemplate>
-                    </TreeView.Resources>
-                </TreeView>
-            </Border>
 
-            <!-- Right: Pretty bracket tree -->
-            <Border Grid.Column="2" Background="{DynamicResource PanelBg}" CornerRadius="10" Padding="10">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                    <TextBox x:Name="BracketOutput" IsReadOnly="True" Background="Transparent"
-                             Foreground="{DynamicResource TextPrimary}" FontFamily="Consolas" FontSize="13.5"
-                             BorderThickness="0" TextWrapping="NoWrap" AcceptsReturn="True"/>
-                </ScrollViewer>
-            </Border>
+                            <StackPanel Grid.Column="1" Margin="0,0,14,0">
+                                <TextBlock Text="{local:Tr lbl.quantity}" Style="{StaticResource McLabel}"/>
+                                <TextBox x:Name="QuantityInput" Style="{StaticResource McTextBox}"
+                                         Width="84" Height="38" FontSize="14" Text="1"
+                                         ToolTip="{local:Tr tip.quantity}"/>
+                            </StackPanel>
+
+                            <Button Grid.Column="2" Content="✨ BUILD TREE" Width="160" Height="38"
+                                    Style="{StaticResource McButtonPrimary}" VerticalAlignment="Bottom"
+                                    Click="BuildTree_Click"/>
+
+                            <!-- Afkapgrenzen van de planner; ze worden in settings.json bewaard -->
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,14,0">
+                                <StackPanel Margin="0,0,10,0">
+                                    <TextBlock Text="{local:Tr lbl.maxcrafts}" Style="{StaticResource McLabel}"/>
+                                    <TextBox x:Name="CraftLimitInput" Style="{StaticResource McTextBox}"
+                                             Width="76" Height="38" FontSize="14" Text="16"
+                                             TextChanged="PlannerLimit_TextChanged"
+                                             ToolTip="{local:Tr tip.maxcrafts}"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="{local:Tr lbl.baselimit}" Style="{StaticResource McLabel}"/>
+                                    <TextBox x:Name="BaseLimitInput" Style="{StaticResource McTextBox}"
+                                             Width="88" Height="38" FontSize="14" Text="1000"
+                                             TextChanged="PlannerLimit_TextChanged"
+                                             ToolTip="{local:Tr tip.baselimit}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Bottom">
+                                <Button Content="⊞ EXPAND" Width="104" Height="38" Margin="0,0,6,0"
+                                        Style="{StaticResource McButtonSteel}" Click="ExpandAll_Click"/>
+                                <Button Content="⊟ COLLAPSE" Width="112" Height="38"
+                                        Style="{StaticResource McButtonSteel}" Click="CollapseAll_Click"/>
+                                <Button Content="{local:Tr btn.origin}" Width="150" Height="38" Margin="6,0,0,0"
+                                        Style="{StaticResource McButtonSteel}" Click="ShowProvenance_Click"
+                                        ToolTip="{local:Tr tip.origin}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Filter + export -->
+                        <Grid x:Name="CraftFilterRow" Grid.Row="2" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="🔍 FILTER" Style="{StaticResource McLabel}"/>
+                                <TextBox x:Name="FilterBox" Style="{StaticResource McTextBox}"
+                                         Height="34" FontSize="13" HorizontalAlignment="Stretch"
+                                         TextChanged="FilterBox_TextChanged"
+                                         ToolTip="{local:Tr tip.filter}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom">
+                                <Button Content="📋 COPY" Width="108" Height="34" Margin="0,0,6,0"
+                                        Style="{StaticResource McButtonSteel}" Click="CopyText_Click"
+                                        ToolTip="{local:Tr tip.copy}"/>
+                                <Button Content="💾 .TXT" Width="108" Height="34" Margin="0,0,6,0"
+                                        Style="{StaticResource McButtonSteel}" Click="SaveTxt_Click"/>
+                                <Button Content="🖼️ PNG" Width="108" Height="34"
+                                        Style="{StaticResource McButtonSuccess}" Click="SavePng_Click"
+                                        ToolTip="{local:Tr tip.png}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- JEI bookmarks -->
+                        <ContentControl x:Name="BookmarkPanel" Grid.Row="3" Style="{StaticResource McPanelDeep}" Margin="0,0,0,10" Padding="8,7">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="📑 JEI BOOKMARKS" Style="{StaticResource McLabel}"
+                                           Margin="1,0,12,0" VerticalAlignment="Center"/>
+
+                                <ComboBox x:Name="BookmarkCombo" Grid.Column="1" Style="{StaticResource McComboBox}"
+                                          Height="32" DisplayMemberPath="Display" Margin="0,0,10,0"
+                                          SelectionChanged="BookmarkCombo_SelectionChanged"
+                                          ToolTip="{local:Tr tip.bookmarkcombo}"/>
+
+                                <Button Grid.Column="2" Content="{local:Tr btn.loadbookmarks}" Width="118" Height="32" Margin="0,0,6,0"
+                                        Style="{StaticResource McButtonSteel}" Click="LoadBookmarks_Click"
+                                        ToolTip="{local:Tr tip.loadbookmarks}"/>
+
+                                <Button Grid.Column="3" Content="🗂 INSTANCE…" Width="150" Height="32" Margin="0,0,6,0"
+                                        Style="{StaticResource McButtonPrimary}" Click="ChooseInstance_Click"
+                                        ToolTip="{local:Tr tip.instance}"/>
+
+                                <Button Grid.Column="4" Content="🔄" Width="46" Height="32"
+                                        Style="{StaticResource McButtonSteel}" Click="ReloadBookmarks_Click"
+                                        ToolTip="{local:Tr tip.reload}"/>
+
+                                <Button x:Name="ScanModsButton" Grid.Column="5" Content="🧩 SCAN MODS" Width="160"
+                                        Height="32" Margin="6,0,0,0"
+                                        Style="{StaticResource McButtonSteel}" Click="ScanMods_Click"
+                                        ToolTip="{local:Tr tip.scanmods}"/>
+
+                                <Button x:Name="ModsButton" Grid.Column="6" Content="📦 MODS" Width="118"
+                                        Height="32" Margin="6,0,0,0"
+                                        Style="{StaticResource McButtonSteel}" Click="Mods_Click"
+                                        ToolTip="{local:Tr tip.mods}"/>
+
+                                <TextBlock x:Name="RecipeSourceText" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                                           Margin="1,7,10,0" FontSize="10.5" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           ToolTip="{local:Tr tip.recipesource}"
+                                           Text="{local:Tr status.recipes.empty}"/>
+
+                                <TextBlock x:Name="BookmarkStatusText" Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2"
+                                           Margin="0,7,0,0" FontSize="10.5" TextAlignment="Right"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="420"
+                                           Foreground="{DynamicResource TextSecondary}" Text="{local:Tr status.bookmarks.searching}"/>
+
+                                <!-- Voortgang van de automatische scan; die draait op de achtergrond. -->
+                                <ProgressBar x:Name="ScanProgressBar" Grid.Row="1" Grid.Column="5"
+                                             Height="8" Margin="6,8,10,0" VerticalAlignment="Center"
+                                             IsIndeterminate="True" Visibility="Collapsed"
+                                             Foreground="{DynamicResource Accent}"
+                                             Background="{DynamicResource SlotFace}"
+                                             ToolTip="{local:Tr tip.scanprogress}"/>
+
+                                <!-- ✖ STOP breekt de scan of het inlezen van de dump af; alleen zichtbaar tijdens het werk. -->
+                                <Button x:Name="ScanCancelButton" Grid.Row="1" Grid.Column="6"
+                                        Content="✖ STOP" Height="22" Width="100"
+                                        HorizontalAlignment="Right" Margin="6,6,0,0"
+                                        Style="{StaticResource McButtonSteel}" Visibility="Collapsed"
+                                        Click="CancelScan_Click"
+                                        ToolTip="{local:Tr tip.stop}"/>
+                            </Grid>
+                        </ContentControl>
+
+                        <!-- Watch folder -->
+                        <ContentControl x:Name="WatchPanel" Grid.Row="4" Style="{StaticResource McPanelDeep}" Margin="0,0,0,10" Padding="8,7">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="📂 WATCH" Style="{StaticResource McLabel}"
+                                           Margin="1,0,12,0" VerticalAlignment="Center"/>
+
+                                <TextBox x:Name="WatchPathBox" Grid.Column="1" Style="{StaticResource McTextBox}"
+                                         Height="32" FontSize="12" IsReadOnly="True" Margin="0,0,10,0"
+                                         Foreground="{DynamicResource ScreenDim}"
+                                         ToolTip="{local:Tr tip.watchpath}"/>
+
+                                <Button Grid.Column="2" Content="{local:Tr btn.choosedir}" Width="118" Height="32" Margin="0,0,6,0"
+                                        Style="{StaticResource McButtonSteel}" Click="BrowseWatchFolder_Click"/>
+
+                                <Button x:Name="WatchToggleButton" Grid.Column="3" Content="▶ START WATCH"
+                                        Width="150" Height="32" Margin="0,0,10,0"
+                                        Style="{StaticResource McButtonPrimary}" Click="ToggleWatch_Click"/>
+
+                                <TextBlock x:Name="WatchStatusText" Grid.Column="4" VerticalAlignment="Center"
+                                           FontSize="10.5" Foreground="{DynamicResource WatchInactive}"
+                                           Text="{local:Tr status.stopped}"/>
+                            </Grid>
+                        </ContentControl>
+
+                        <!-- Werkplek: elke tab krijgt het volledige paneel -->
+                        <Grid Grid.Row="5">
+
+                            <!-- TREE: interactieve boom + dezelfde boom als tekst -->
+                            <!-- TREE: interactieve boom -->
+                            <Grid x:Name="TreeWorkspacePanel">
+                                <ContentControl Style="{StaticResource McScreen}">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+
+                                        <ContentControl Style="{StaticResource McHeader}" Padding="10,4">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="🌳 RECIPE TREE" Style="{StaticResource McHeaderText}"/>
+                                                <TextBlock Grid.Column="1" Text="{local:Tr header.tree.hint}" FontSize="9.5"
+                                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" Margin="10,0,0,0"
+                                                           Foreground="{DynamicResource TextSecondary}"/>
+                                            </Grid>
+                                        </ContentControl>
+
+                                        <TreeView x:Name="RecipeTreeView" Grid.Row="1" Style="{StaticResource McTreeView}"
+                                                  MouseDoubleClick="RecipeTreeView_MouseDoubleClick"
+                                                  ToolTip="{local:Tr tip.tree}"/>
+                                    </Grid>
+                                </ContentControl>
+
+                            </Grid>
+
+                            <!-- BRACKET: het volledige diagram, met zoom -->
+                            <ContentControl x:Name="BracketWorkspacePanel" Style="{StaticResource McScreen}"
+                                            Visibility="Collapsed">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <ContentControl Style="{StaticResource McHeader}" Padding="10,4">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Grid.Column="0" Text="🧩 BRACKET" Style="{StaticResource McHeaderText}"/>
+
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right"
+                                                            VerticalAlignment="Center">
+                                                    <Button x:Name="ZoomOutButton" Content="−" Width="26" Height="20" Padding="0"
+                                                            FontSize="12" Style="{StaticResource McButtonSteel}"
+                                                            Click="ZoomOut_Click" ToolTip="{local:Tr tip.zoomout}"/>
+                                                    <TextBlock x:Name="ZoomLabel" Text="100%" Width="44" FontSize="9.5"
+                                                               TextAlignment="Center" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextSecondary}"/>
+                                                    <Button x:Name="ZoomInButton" Content="+" Width="26" Height="20" Padding="0"
+                                                            FontSize="12" Style="{StaticResource McButtonSteel}"
+                                                            Click="ZoomIn_Click" ToolTip="{local:Tr tip.zoomin}"/>
+                                                    <Button x:Name="ZoomFitButton" Content="⤢ FIT" Width="54" Height="20" Padding="0"
+                                                            Margin="8,0,0,0" FontSize="9.5" Style="{StaticResource McButtonSteel}"
+                                                            Click="ZoomFit_Click" ToolTip="{local:Tr tip.zoomfit}"/>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <!-- Eigen regel: deze uitleg past niet naast de zoomknoppen. -->
+                                            <TextBlock Text="{local:Tr bracket.hint}"
+                                                       FontSize="9.5" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       ToolTip="{local:Tr tip.bracket.hint}"/>
+                                        </StackPanel>
+                                    </ContentControl>
+
+                                    <ScrollViewer x:Name="BracketScrollViewer" Grid.Row="1" Padding="10"
+                                                  Background="Transparent"
+                                                  PreviewMouseWheel="BracketScrollViewer_PreviewMouseWheel"
+                                                  PreviewMouseLeftButtonDown="BracketScrollViewer_PreviewMouseLeftButtonDown"
+                                                  PreviewMouseMove="BracketScrollViewer_PreviewMouseMove"
+                                                  PreviewMouseLeftButtonUp="BracketScrollViewer_PreviewMouseLeftButtonUp"
+                                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                        <Canvas x:Name="BracketCanvas" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                Background="Transparent"/>
+                                    </ScrollViewer>
+
+                                    <!-- Tekstversie voor COPY/.TXT; de PNG-export gebruikt het diagram. -->
+                                    <TextBlock x:Name="BracketEmptyText" Grid.Row="1" Visibility="Collapsed"
+                                               Text="{local:Tr bracket.empty}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               FontSize="12" Foreground="{DynamicResource ScreenDim}"/>
+
+                                    <TextBox x:Name="BracketOutput" Grid.Row="1" Visibility="Collapsed"
+                                             Style="{StaticResource McViewerText}"/>
+                                </Grid>
+                            </ContentControl>
+
+                            <!-- PLAN: stappenplan over de volle breedte -->
+                            <ContentControl x:Name="PlanWorkspacePanel" Style="{StaticResource McScreen}"
+                                            Visibility="Collapsed">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <ContentControl Style="{StaticResource McHeader}" Padding="10,4">                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{local:Tr header.plan}" Style="{StaticResource McHeaderText}"/>
+                                                <TextBlock Grid.Column="1" Text="{local:Tr main.subtitle}" FontSize="9.5"
+                                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" Margin="10,0,0,0"
+                                                           Foreground="{DynamicResource TextSecondary}"/>
+                                            </Grid>
+                                    </ContentControl>
+
+                                    <ScrollViewer x:Name="PlanScrollViewer" Grid.Row="1" Padding="10"
+                                                  Background="Transparent"
+                                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                        <TextBox x:Name="StepPlanOutput" Style="{StaticResource McViewerText}"
+                                                 FontSize="13" TextWrapping="NoWrap" AcceptsReturn="True"/>
+                                    </ScrollViewer>
+                                </Grid>
+                            </ContentControl>
+
+                            <!-- LIST: boodschappenlijst over de volle breedte -->
+                            <ContentControl x:Name="ShoppingWorkspacePanel" Style="{StaticResource McScreen}"
+                                            Visibility="Collapsed">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <ContentControl Style="{StaticResource McHeader}" Padding="10,4">                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{local:Tr header.shopping}" Style="{StaticResource McHeaderText}"/>
+                                                <TextBlock Grid.Column="1" Text="{local:Tr header.shopping.sub}" FontSize="9.5"
+                                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" Margin="10,0,0,0"
+                                                           Foreground="{DynamicResource TextSecondary}"/>
+                                            </Grid>
+                                    </ContentControl>
+
+                                    <ScrollViewer x:Name="ShoppingScrollViewer" Grid.Row="1" Padding="10"
+                                                  Background="Transparent"
+                                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                        <TextBox x:Name="ShoppingOutput" Style="{StaticResource McViewerText}"
+                                                 FontSize="13" TextWrapping="NoWrap" AcceptsReturn="True"/>
+                                    </ScrollViewer>
+                                </Grid>
+                            </ContentControl>
+                        </Grid>
+                    </Grid>
+                </ContentControl>
+            </Grid>
+
+            <!-- ===== Statusbalk ===== -->
+            <!-- ⚠ Verouderd: instance-jars of dump nieuwer dan de laatste fold -->
+            <ContentControl x:Name="StalePanel" Grid.Row="2" Style="{StaticResource McPanel}"
+                            Margin="0,0,0,10" Padding="10,7" Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="⚠" FontSize="16" Margin="0,0,10,0"
+                               VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
+
+                    <TextBlock x:Name="StaleText" Grid.Column="1" FontSize="11" TextWrapping="Wrap"
+                               VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" Text=""/>
+
+                    <Button x:Name="StaleReindexButton" Grid.Column="2" Content="{local:Tr btn.reindex}"
+                            Width="240" Height="30" Margin="10,0,0,0" Style="{StaticResource McButtonPrimary}"
+                            Click="StaleReindex_Click"
+                            ToolTip="{local:Tr tip.reindex}"/>
+                </Grid>
+            </ContentControl>
+
+            <ContentControl Grid.Row="3" Style="{StaticResource McHeader}" Margin="0,10,0,0" Padding="10,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" FontSize="10" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{local:Tr footer.tip}"/>
+                    <TextBlock Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="10"
+                               Margin="12,0,0,0" Foreground="{DynamicResource TextSecondary}" Text="po3 · jei · recipes"/>
+                </Grid>
+            </ContentControl>
         </Grid>
-
-        <TextBlock Grid.Row="3" Margin="0,12,0,0" Foreground="{DynamicResource TextSecondary}" FontSize="13"
-                   Text="Tip: Add more recipes to recipes.json • Filter highlights matching nodes • Quantity multiplies the whole tree 💕"/>
     </Grid>
 </Window>

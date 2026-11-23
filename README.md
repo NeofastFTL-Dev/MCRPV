@@ -1,63 +1,115 @@
 # MCRPV — Minecraft Recipe Tree Viewer
 
-A small WPF desktop app that expands a single item into its **full recursive crafting tree**.
-It was originally written for the mythic recipes of *Project Ozone 3* (1.12.2), where a late-game
-item can sit six or seven crafting steps away from anything you can actually mine — and the whole
-point is to see that chain at once instead of clicking through JEI. Nothing in the app is specific
-to that pack, so the name is generic: any recipe set you can write as a JSON dictionary works.
+A WPF desktop app that expands a single item into its **full recursive crafting tree**, built for
+modded Minecraft packs. It was written for the mythic recipes of *Project Ozone 3* (1.12.2), where a
+late-game item can sit six or seven crafting steps away from anything you can actually mine — and the
+whole point is to see that chain at once instead of clicking through JEI.
 
-Recipes live in a plain `recipes.json`, so the same app works for any pack whose recipes you can
-express as "item → list of ingredients".
+Nothing in the app is specific to that pack: it reads a plain `recipes.json`, or builds one itself
+from a JEIExporter dump or straight out of a Minecraft instance. The UI is in Dutch; the code and this
+README are in English.
 
-## How it works
-
-```
-recipes.json ──► Dictionary<string, Recipe> (case-insensitive)
-                        │
-     item + quantity ───┴──► BuildNode(item, qty, visited)
-                                │  qty of an ingredient = Count × qty of its parent
-                                ├─ no recipe / empty Ingredients  → leaf (ore, log, cobble, …)
-                                └─ item already on this branch    → "♻️ (cycle)", stops there
-                        │
-        ┌───────────────┴────────────────┐
-        │                                │
-  TreeView (left)                bracket text (right)
-  expand / collapse              ├─ └─ box drawing, copy, .txt, PNG
-```
-
-Two views of the same tree are built side by side: an interactive `TreeView` you can filter and
-collapse, and a monospace bracket tree that is what you actually paste into Discord or a notes file.
-The PNG export renders that same text block with `RenderTargetBitmap`, so no screenshot tool is
-needed to share a tree.
-
-## Features
+## What it does
 
 | Feature | Detail |
 |---|---|
-| Recursive tree | unlimited depth, quantities multiply down the whole tree |
-| Cycle detection | a recipe that loops back marks the node `♻️ (cycle)` instead of recursing forever |
-| Quantity scaling | type `4` for a stack of four and every ingredient is multiplied accordingly |
-| Filter | highlights matches in yellow, bolds them and auto-expands the branches that contain them |
-| Expand / collapse all | one click each |
-| Copy text | the bracket tree to the clipboard |
-| Save `.txt` | `<item>_recipe_tree.txt` |
-| Save `.png` | `<item>_recipe_tree.png`, rendered from the bracket text in Consolas |
-| Dark / light theme | dark (Catppuccin Mocha palette) on start, purple/cream light theme otherwise |
+| Recursive tree | unlimited depth, quantities multiply down the whole tree, cycle detection instead of infinite recursion |
+| Two views | an interactive `TreeView` for exploring and a monospace bracket tree for pasting into Discord or notes |
+| Filter | highlights matches, bolds them and auto-expands the branches that contain them |
+| Base → end plan | base materials plus the crafting steps in order, with real totals |
+| Shopping list | adds up the base materials of every JEI bookmark at once |
+| JEI bookmarks | pick a bookmark and see its step plan; the bookmark file is watched, so it stays live while Minecraft runs |
+| Watch folder | reloads when a new `recipes.json` (or dump) appears |
+| Export | clipboard, `.txt` and `.png`, the last rendered from the bracket text |
+| Themes | dark (Catppuccin Mocha) and a purple/cream light theme |
+| Real item names | names come from the instance's lang files (`mods/*.jar`, resource packs), falling back to title case |
+| Index & packs | builds a per-pack recipe index (`pack.json` + jar shards + base + pack layer), switchable profiles |
+| Provenance, dead patches, changes | which source supplied a recipe, which patches no longer apply, and what changed between two sets |
 
 ## Repository layout
 
 | Path | What |
 |---|---|
-| `MCRPV/` | the WPF project (`net8.0-windows`, assembly name `MCRPV`) |
-| `MCRPV/MainWindow.xaml` | layout and both themes' brushes |
-| `MCRPV/MainWindow.xaml.cs` | tree building, bracket rendering, filter, exports |
-| `MCRPV/recipes.json` | the recipe database, copied next to the exe on every build |
-| `MCRPV/dist/wine-x64/` | the published single-file build (not committed) |
+| `MCRPV/` | the WPF project (`net8.0-windows`, assembly `MCRPV`) |
+| `MCRPV/MainWindow.xaml`, `MCRPV/MainWindow.xaml.cs` | the main window: tree, bracket view, plan, exports, themes |
+| `MCRPV/RecipePlanner.cs`, `MCRPV/RecipeLayers.cs`, `MCRPV/RecipeIndex.cs` | plan building, pack layering, the recipe index |
+| `MCRPV/ModRecipeScanner.cs`, `MCRPV/ModScanWindow.xaml` | scanning a Minecraft instance / mod jars for recipes |
+| `MCRPV/IndexCommands.cs` | the command-line modes (`--index`, `--profiles`, `--herkomst`, …) |
+| `MCRPV/SelfTest.cs` | the built-in self-check (`--selftest`) |
+| `MCRPV/Lang.nl.cs`, `MCRPV/Lang.en.cs` | every user-facing string |
+| `MCRPV/recipes.json` | the demo recipe set, copied next to the exe on every build |
+| `build-wine.sh`, `run-wine.sh` | build and launch the published exe under Wine |
 
-## The recipe file
+## Running it
 
-`recipes.json` is a dictionary keyed by item name; keys are compared case-insensitively, so
-`Diamond` and `diamond` are the same item.
+**A fresh clone contains source only — there is no exe in git.** Build once, then run:
+
+```bash
+./build-wine.sh     # -> MCRPV/dist/wine-x64/MCRPV.exe (self-contained, needs Wine on Linux)
+./run-wine.sh       # launches that exe in ~/.wine-apps
+```
+
+On Windows, open `MCRPV/MCRPV.csproj` in Visual Studio 2022 (**.NET desktop development**) and press F5.
+
+### The one thing that trips people up on Linux
+
+`dotnet run` in a clone fails with:
+
+```
+error NETSDK1100: To build a project targeting Windows on this operating system,
+set the EnableWindowsTargeting property to true.
+```
+
+The project targets `net8.0-windows` (WPF only exists on Windows), so on Linux every build step needs
+the Windows targeting pack. `build-wine.sh` passes it for you; by hand it is:
+
+```bash
+dotnet build MCRPV/MCRPV.csproj -p:EnableWindowsTargeting=true
+# or a real self-contained exe:
+dotnet publish MCRPV/MCRPV.csproj -c Release -r win-x64 --self-contained true \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+  -p:EnableWindowsTargeting=true -o dist/wine-x64
+```
+
+Running it also needs Wine plus the core fonts in the prefix (`winetricks -q corefonts` once), because
+WPF aborts while shaping text without them. `./run-wine.sh` sets the prefix (`~/.wine-apps`).
+
+### The Wine build route
+
+`build-wine.sh` does what the shipping exe does on this machine: the Linux SDK restores the packages
+(NuGet's signed-package verification cannot pass inside Wine), the Windows SDK in the prefix restores
+again from that cache, then publishes Release / win-x64 / self-contained / single file.
+`./build-wine.sh --dry-run` prints the three commands without running them.
+
+## Command line
+
+| Argument | What it does |
+|---|---|
+| `--selftest` | runs 85 checks (tree, zoom, plan, index, provenance, languages) without a window and exits with the failure count |
+| `--index` | builds the recipe index for a pack; `--diff` / `--reindex=pack` refreshes only the pack layer and the fold, `--apply` writes the result to `recipes.json` |
+| `--scan --instance=<dir> --modes=...` | scans an instance for recipes |
+| `--convert --instance=<dir>` | converts a JEIExporter dump found in the instance |
+| `--plan=<item> --qty=<n>` | prints the base → end plan for one item |
+| `--profiles` | lists the profiles of every indexed pack |
+| `--use-pack=<name>` | makes an indexed pack the active recipe set |
+| `--herkomst=<item>` / `--provenance=<item>` | explains where one recipe came from |
+| `--dead-patches` | lists patches that no longer apply |
+
+## Where the data lives
+
+Everything the app writes goes to `%LOCALAPPDATA%\MCRPV`:
+
+| File | What |
+|---|---|
+| `recipes.json` | the active recipe set (copied in from the instance, an index build or the exe folder) |
+| `crash.log` | any unhandled exception, with a timestamp and the version |
+| `selftest-report.txt` | the last `--selftest` report |
+| index files | the built pack index and profiles |
+
+Before the rename this folder was `%LOCALAPPDATA%\PO3RecipeTree`; it is moved across on the first
+start, so the index and the active recipe set are kept.
+
+`recipes.json` is a dictionary keyed by item name, compared case-insensitively:
 
 ```json
 {
@@ -66,126 +118,33 @@ needed to share a tree.
       { "Item": "iron_ingot", "Count": 3 },
       { "Item": "stick", "Count": 2 }
     ]
-  },
-  "stick": {
-    "Ingredients": [ { "Item": "plank", "Count": 2 } ]
   }
 }
 ```
 
-Rules:
-
-* An item with no entry, or with an empty `Ingredients` list, is a **base item** — the tree stops there.
-  Ores, logs, cobblestone and anything else you cannot craft should simply be left out.
-* `Count` is the amount for **one** craft of the parent. The app multiplies it by the quantity of the
-  node above, so a `×4` pickaxe asks for 12 ingots and 8 sticks.
-* Names are shown exactly as written in the JSON. There is no tag/ore-dictionary support: if a recipe
-  accepts "any plank", pick one and use its name.
-* If no `recipes.json` sits next to the exe, the app writes a small starter file there so it can always
-  start; replace it with your own.
-
-The bundled file holds a handful of demo recipes only. A full Project Ozone 3 database can be generated with the companion
-[JEIConverter](https://github.com/NeofastFTL-Dev/JEIConverter) project from a JEIExporter dump.
-
-## Building on this machine
-
-The app is WPF, so it only targets Windows (`net8.0-windows`). Two toolchains exist on this machine:
-
-* `~/.dotnet/dotnet` — Linux SDKs **8.0.428** and **10.0.404** (`dotnet` on `PATH` resolves to 10.0.404)
-* `~/.wine-dotnet` — the same SDKs installed inside a Wine prefix, which is how the Windows build is
-  produced here
-
-### Windows / Visual Studio
-
-Open `MCRPV/MCRPV.csproj` (or the folder) in Visual Studio 2022 with the
-**.NET desktop development** workload, then press F5.
-
-### Cross-build on Linux (the route used for `dist/wine-x64`)
-
-The repository carries the script that does the whole sequence below:
-
-```bash
-./build-wine.sh              # -> MCRPV/dist/wine-x64/MCRPV.exe
-./build-wine.sh --dry-run    # print the three commands instead
-```
-
-By hand, restore with the Linux SDK first — restore has to fetch the Windows targeting/desktop packs, and the
-Wine-side NuGet cannot complete HTTPS requests on this machine.
-
-```bash
-cd MCRPV
-~/.dotnet/dotnet restore MCRPV.csproj -r win-x64 -p:EnableWindowsTargeting=true
-```
-
-Then publish with the Wine SDK, which has the real Windows targeting packs:
-
-```bash
-WINEPREFIX=~/.wine-dotnet wine 'C:\dotnet\dotnet.exe' publish MCRPV.csproj \
-  -c Release -r win-x64 --self-contained true --no-restore \
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
-  -p:DebugType=none -o dist/wine-x64
-```
-
-That produces `dist/wine-x64/MCRPV.exe` (about 160 MB, everything bundled, no .NET
-install needed on the target) plus `recipes.json`, which must stay in the same folder as the exe.
-The publish step takes a few minutes under Wine; the `--no-restore` flag is deliberate, the RID-specific
-assets come from the Linux restore above.
-
-### Running it under Wine
-
-```bash
-./run-wine.sh                # launches the published exe in ~/.wine-apps
-```
-
-which runs the equivalent of:
-
-```bash
-WINEPREFIX=~/.wine-apps wine "MCRPV/dist/wine-x64/MCRPV.exe"
-```
-
-WPF needs core fonts in the prefix or it aborts while shaping text at startup; install them once
-with `WINEPREFIX=~/.wine-apps winetricks -q corefonts`.
-
-A 256 px icon lives at `~/.local/share/icons/hicolor/256x256/apps/mcrpv.png` and is used by the
-Linux desktop entry (`mcrpv.desktop`), which resolves the project folder at launch instead of
-baking in an absolute path. Note that `ApplicationIcon` in the `.csproj` is empty, so the exe
-itself still ships without an embedded icon; setting it to an `.ico` would fix the Windows taskbar.
-
-## Screenshots
-
-Screenshots belong in `docs/screenshots/`; none are committed yet. Three captures cover the app:
-
-| File to add | What to capture |
-|---|---|
-| `docs/screenshots/main-window-dark.png` | default dark window, `diamond` ×1 built, tree on the left and bracket tree on the right |
-| `docs/screenshots/filter.png` | filter box with `ingot` typed in, matches highlighted and auto-expanded |
-| `docs/screenshots/png-export.png` | the saved PNG of an `iron_pickaxe` tree |
-
-```html
-<!-- Uncomment once the files exist:
-![Main window](docs/screenshots/main-window-dark.png)
-![Filter highlighting](docs/screenshots/filter.png)
-![Exported PNG](docs/screenshots/png-export.png)
--->
-```
+An item with no entry (or an empty `Ingredients` list) is a base item and the tree stops there.
+`Count` is the amount for one craft of the parent; the app multiplies it by the quantity of the node
+above.
 
 ## Troubleshooting
 
-* **Nothing happens when you press *Build Tree*** — the name must match a key in `recipes.json`
-  exactly (apart from case). `diamond` works, `Diamond Ore` does not.
-* **The tree stops too early** — the ingredient has no entry in `recipes.json`, so it is treated as a
-  base item. Add it if it is craftable.
-* **The PNG is cut off** — the export uses a monospace layout at 14 px; extremely wide trees are
-  rendered at their full size, so zoom out when viewing rather than expecting wrapping.
+* **Nothing happens after `./run-wine.sh`** — build first: a clone has no `dist/`. If it still shows
+  no window, check `%LOCALAPPDATA%\MCRPV\crash.log` (under Wine:
+  `~/.wine-apps/drive_c/users/<you>/AppData/Local/MCRPV/crash.log`).
+* **`NETSDK1100`** — add `-p:EnableWindowsTargeting=true`, or use `./build-wine.sh`.
+* **The tree stops too early** — that ingredient has no entry in the active `recipes.json`, so it is
+  treated as a base item.
+* **The PNG is cut off** — the export uses a fixed monospace layout; very wide trees are rendered at
+  full size, so zoom out when viewing.
 
 ## Credits
 
-* UI: **WPF** on .NET 8 (MIT), no third-party NuGet packages — the whole app is `MainWindow.xaml`
-  plus one code-behind file.
-* Recipe data: recipe inputs belong to **Project Ozone 3** and the individual mod authors; this app
-  only renders whatever is in `recipes.json`.
-* Recipe dumps for the full database come from **JEIExporter** for JEI (1.12.2).
-* Emoji in labels and messages come from **Segoe UI Emoji**.
+* UI: **WPF** on .NET 8 (MIT), with no NuGet dependencies at all — the whole app is the `MCRPV/`
+  project and the .NET base class library.
+* Recipe inputs belong to **Project Ozone 3** and the individual mod authors; the app only renders
+  whatever is in the recipe set.
+* Recipe dumps come from **JEIExporter** for **Just Enough Items** (JEI) on Minecraft 1.12.2, or from
+  the instance's own jars.
 * The 256 px application icon was drawn for this project.
 
 ## License
