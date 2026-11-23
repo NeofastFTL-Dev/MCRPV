@@ -83,11 +83,17 @@ fn arg_value(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|arg| arg == name).and_then(|index| args.get(index + 1)).cloned()
 }
 
-/// `%LOCALAPPDATA%\MCRPV` on Windows, `$XDG_DATA_HOME/mcrpv` elsewhere, with the old folder moved
-/// across the way the .NET app did.
+/// `%LOCALAPPDATA%\MCRPV` on Windows, `~/Library/Application Support/MCRPV` on macOS and
+/// `$XDG_DATA_HOME/mcrpv` elsewhere, with an old folder moved across the way the .NET app did.
 fn default_data_dir() -> PathBuf {
+    let apple = cfg!(target_os = "macos");
+
     let base = if cfg!(windows) {
         std::env::var("LOCALAPPDATA").ok().map(PathBuf::from)
+    } else if apple {
+        std::env::var("HOME")
+            .ok()
+            .map(|home| PathBuf::from(home).join("Library").join("Application Support"))
     } else {
         std::env::var("XDG_DATA_HOME")
             .ok()
@@ -97,8 +103,8 @@ fn default_data_dir() -> PathBuf {
     };
 
     let base = base.unwrap_or_else(std::env::temp_dir);
-    let dir = base.join(if cfg!(windows) { "MCRPV" } else { "mcrpv" });
-    let legacy = base.join(if cfg!(windows) { "PO3RecipeTree" } else { "po3recipetree" });
+    let dir = base.join(if cfg!(windows) || apple { "MCRPV" } else { "mcrpv" });
+    let legacy = base.join(if cfg!(windows) || apple { "PO3RecipeTree" } else { "po3recipetree" });
     if !dir.exists() && legacy.exists() {
         let _ = std::fs::rename(&legacy, &dir);
     }

@@ -1,10 +1,10 @@
-# MCRPV — Minecraft Recipe Tree Viewer (Linux)
+# MCRPV — Minecraft Recipe Tree Viewer (Linux and macOS)
 
-The native Linux build of MCRPV: one item expanded into its **full recursive crafting tree**, for
-modded Minecraft packs. Written in Rust with egui, so it runs on Linux without Wine, a .NET runtime
-or a Windows prefix.
+The native Linux and macOS build of MCRPV: one item expanded into its **full recursive crafting
+tree**, for modded Minecraft packs. Written in Rust with egui, so it runs without Wine, a .NET
+runtime or a Windows prefix.
 
-This is the `linux` branch. The original WPF/.NET app (and its Wine fallback) is untouched on
+This is the `macos` branch; `linux` carries the same app with the Linux-only CI. The original WPF/.NET app (and its Wine fallback) is untouched on
 `main`, together with the full history of how it got here.
 
 ## What works on this branch
@@ -49,8 +49,8 @@ cargo run --release -- --selftest   # 86 checks: names, both language tables, pa
 ## CI
 
 `.github/workflows/build.yml` builds, tests, self-tests and clippies the crate on every push to
-`linux` (and on pull requests), checks that the result is a Linux ELF binary, and uploads it as the
-`mcrpv-linux-x86_64` artifact.
+`linux`/`macos` (and on pull requests), checks that each result is a Linux ELF or macOS Mach-O
+binary, and uploads it as the `mcrpv-linux-x86_64` or `mcrpv-macos` artifact.
 
 ## Repository layout
 

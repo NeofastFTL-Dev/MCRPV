@@ -4,7 +4,7 @@ name: build
 # targeting pack. CI builds and tests it on Linux and uploads the binary as an artifact.
 on:
   push:
-    branches: [linux]
+    branches: [linux, macos]
   pull_request:
   workflow_dispatch:
 
@@ -62,5 +62,50 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: mcrpv-linux-x86_64
+          path: rust/target/release/mcrpv
+          if-no-files-found: error
+
+  macos:
+    name: macOS build + tests
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: cargo build --release
+        run: cargo build --release --locked
+
+      - name: Unit tests
+        run: cargo test --release --locked
+
+      - name: Self-test
+        run: ./target/release/mcrpv --selftest
+
+      - name: Clippy
+        run: cargo clippy --locked -- -D warnings
+
+      - name: Check the binary
+        run: |
+          set -euo pipefail
+          ftype=$(file -b target/release/mcrpv)
+          echo "$ftype"
+          case "$ftype" in
+            *Mach-O*) ;;
+            *) echo "not a Mach-O binary"; exit 1 ;;
+          esac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcrpv-macos
           path: rust/target/release/mcrpv
           if-no-files-found: error
