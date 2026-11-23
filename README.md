@@ -26,6 +26,33 @@ README are in English.
 | Index & packs | builds a per-pack recipe index (`pack.json` + jar shards + base + pack layer), switchable profiles |
 | Provenance, dead patches, changes | which source supplied a recipe, which patches no longer apply, and what changed between two sets |
 
+## Using it
+
+**Watch folder.** Pick a folder with *Kies map…* and press *Start Watch*: any `.json` that appears
+or changes there is copied to `%LOCALAPPDATA%\MCRPV\recipes.json` and becomes the active set, so a
+JEIExporter dump can drop in while the app is open.
+
+**Instances and JEI bookmarks.** *🗂 Instance…* lists every instance it can find — `.minecraft`,
+Prism, MultiMC, PolyMC, CurseForge, Modrinth and ATLauncher — newest first, with its last-modified
+time. For each it looks at `config/jei/bookmarks.ini`, the per-world `saves/<world>/jei/` files and a
+`bookmarks.ini` in the instance root. The choice is remembered in
+`%LOCALAPPDATA%\MCRPV\settings.json`; with one instance it is used automatically, with several the
+picker opens. *📥 Laad bookmarks…* also accepts `bookmarks.json`, a plain list (one item per line,
+optionally `x4`) or a JEIExporter dump.
+
+**Three views** on the right: *🌳 Tree*, *📋 Basis → eind* (base materials plus the steps in order,
+with totals) and *🛒 Boodschappenlijst*, which adds up the base materials of every loaded bookmark.
+
+**Live bookmarks.** Once a bookmark file is loaded it is watched: JEI rewrites `bookmarks.ini` on every
+change, so an in-game bookmark shows up within about a second. Reloads wait for a short quiet period
+so a half-written file is never read, the selected bookmark stays selected, and an open shopping list
+is re-totalled.
+
+**Recipes from the instance.** Choosing an instance also looks for a JEIExporter dump in `exports/`,
+`jei_exports/`, `dumps/`, `config/jeiexporter/exports/`, `config/jei/dumps/` or a `recipes/` folder,
+including the split per-category files; it is converted in place. Only a **newer** dump is re-read, so
+hand-made additions to the active set are not silently overwritten.
+
 ## Repository layout
 
 | Path | What |
