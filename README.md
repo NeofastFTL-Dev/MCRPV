@@ -164,6 +164,42 @@ above.
 * **The PNG is cut off** — the export uses a fixed monospace layout; very wide trees are rendered at
   full size, so zoom out when viewing.
 
+## Rust port (branch `rust-port`)
+
+The app is moving to Rust + egui so it runs natively on Linux, Windows and macOS without Wine. The
+.NET app on `main` stays exactly as it is until the port reaches parity — nothing working is deleted
+before that.
+
+**Stage 1 (this branch).**
+
+* Data layer: the `recipes.json` model with a case-insensitive index (`rust/src/model.rs`), real item
+  names from `names.json` with a Title Case fallback (`rust/src/names.rs`), and both language tables
+  lifted verbatim out of `Lang.nl.cs` / `Lang.en.cs` into `rust/lang/{nl,en}.json` (294 keys each).
+* The planner (`rust/src/tree.rs`) with the same rules as `RecipePlanner.cs`: 3000-node budget, depth
+  16, 9999 quantity cap, gathering recipes ending the chain, recipes that eat their own output or
+  form a reverse pair skipped, and the base-material budget.
+* An egui main window: filter with live results, quantity, the recursive recipe tree with step/base
+  totals, the bracket text, and an NL/EN switch.
+* A headless self-test: `--selftest` (48 checks, what CI runs).
+
+```bash
+cd rust
+cargo run --release                        # data from ~/.local/share/mcrpv
+cargo run --release -- --data ../MCRPV     # the sample recipes.json in this repo
+cargo run --release -- --selftest
+```
+
+The data folder is the one the .NET app used — `%LOCALAPPDATA%\MCRPV` on Windows,
+`$XDG_DATA_HOME/mcrpv` (or `~/.local/share/mcrpv`) elsewhere — and an existing `PO3RecipeTree` folder
+is moved across on first start.
+
+**Stage 2** covers everything still on the .NET side: the step-plan and layer views
+(`RecipeLayers`, `RecipePlanner`, `RecipeOverlay`), the machine picker with ★ preferences, the
+shopping list over JEI bookmarks, instance and bookmark discovery with the watch folder, the
+per-pack mod index (`pack.json` + jar shards) with provenance, the dead-patch and changes views, and
+the exports (clipboard, `.txt`, PNG bracket diagram) plus the light/dark themes. Only after that does
+`main` switch over.
+
 ## Credits
 
 * UI: **WPF** on .NET 8 (MIT), with no NuGet dependencies at all — the whole app is the `MCRPV/`

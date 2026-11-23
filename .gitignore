@@ -23,3 +23,6 @@ dist/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# ---- Rust port ----
+rust/target/

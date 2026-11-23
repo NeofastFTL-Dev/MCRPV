@@ -6,7 +6,7 @@ name: build
 # so CI builds that and checks the result really is a Windows PE, not an assumption.
 on:
   push:
-    branches: [main]
+    branches: [main, rust-port]
   pull_request:
   workflow_dispatch:
 
@@ -47,3 +47,43 @@ jobs:
           size=$(stat -c %s "$exe")
           test "$size" -gt 1000000 \
             || { echo "$exe is only $size bytes - the self-contained runtime is missing"; exit 1; }
+
+  rust:
+    name: Rust port (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: GUI libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libwayland-dev
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Unit tests
+        run: cargo test --locked
+
+      - name: Self-test
+        run: cargo run --locked -- --selftest
+
+      - name: Clippy
+        run: cargo clippy --locked -- -D warnings
