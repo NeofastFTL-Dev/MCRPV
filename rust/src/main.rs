@@ -118,10 +118,7 @@ fn load_recipes(data_dir: &Path) -> (RecipeSet, PathBuf) {
         }
     }
 
-    let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("MCRPV")
-        .join("recipes.json");
+    let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("recipes.json");
     if bundled.is_file() {
         if let Ok(set) = RecipeSet::load(&bundled) {
             return (set, bundled);

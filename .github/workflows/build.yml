@@ -1,12 +1,10 @@
 name: build
 
-# build-wine.sh needs Wine plus a Windows .NET SDK inside the prefix, which a Linux
-# runner does not have. The publish it produces (Release / win-x64 / self-contained /
-# single file) is reproducible on Linux with EnableWindowsTargeting - WPF included -
-# so CI builds that and checks the result really is a Windows PE, not an assumption.
+# The `linux` branch is the native Rust/egui app: no .NET, no WPF, no Wine prefix and no Windows
+# targeting pack. CI builds and tests it on Linux and uploads the binary as an artifact.
 on:
   push:
-    branches: [main, rust-port]
+    branches: [linux]
   pull_request:
   workflow_dispatch:
 
@@ -14,52 +12,20 @@ permissions:
   contents: read
 
 jobs:
-  windows-x64:
-    name: Publish win-x64
+  linux:
+    name: Linux build + tests
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - name: dotnet publish (Release, win-x64, self-contained, single file)
-        run: |
-          set -euo pipefail
-          dotnet publish MCRPV/MCRPV.csproj \
-            -c Release -r win-x64 --self-contained true \
-            -p:PublishSingleFile=true -p:EnableWindowsTargeting=true \
-            -o out
-
-      - name: Check the published exe
-        run: |
-          set -euo pipefail
-          exe='out/MCRPV.exe'
-          test -f "$exe" || { echo "the exe was not produced"; ls -l out; exit 1; }
-          ls -lh "$exe"
-          ftype=$(file -b "$exe")
-          echo "file type: $ftype"
-          case "$ftype" in
-            *PE32+*) ;;
-            *) echo "$exe is not a PE32+ Windows binary"; exit 1 ;;
-          esac
-          size=$(stat -c %s "$exe")
-          test "$size" -gt 1000000 \
-            || { echo "$exe is only $size bytes - the self-contained runtime is missing"; exit 1; }
-
-  rust:
-    name: Rust port (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: rust
     steps:
       - uses: actions/checkout@v4
+
+      - name: GUI libraries
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgl1-mesa-dev libxkbcommon-dev libwayland-dev
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -69,21 +35,32 @@ jobs:
         with:
           workspaces: rust
 
-      - name: GUI libraries (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libwayland-dev
-
-      - name: Build
-        run: cargo build --locked
+      - name: cargo build --release
+        run: cargo build --release --locked
 
       - name: Unit tests
-        run: cargo test --locked
+        run: cargo test --release --locked
 
       - name: Self-test
-        run: cargo run --locked -- --selftest
+        run: ./target/release/mcrpv --selftest
 
       - name: Clippy
         run: cargo clippy --locked -- -D warnings
+
+      - name: Check the binary
+        run: |
+          set -euo pipefail
+          ftype=$(file -b target/release/mcrpv)
+          echo "$ftype"
+          case "$ftype" in
+            *ELF*) ;;
+            *) echo "not a Linux ELF binary"; exit 1 ;;
+          esac
+          size=$(stat -c %s target/release/mcrpv)
+          test "$size" -gt 1000000 || { echo "binary is only $size bytes"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcrpv-linux-x86_64
+          path: rust/target/release/mcrpv
+          if-no-files-found: error

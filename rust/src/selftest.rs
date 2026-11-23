@@ -440,10 +440,7 @@ pub fn run() -> i32 {
     let _ = std::fs::remove_dir_all(&temp);
 
     // ---------- the sample that ships with the repo ----------
-    let bundled = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("MCRPV")
-        .join("recipes.json");
+    let bundled = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("recipes.json");
     match RecipeSet::load(&bundled) {
         Ok(set) => check!(!set.is_empty(), "bundel: recipes.json leesbaar"),
         Err(_) => check!(false, "bundel: recipes.json leesbaar"),
