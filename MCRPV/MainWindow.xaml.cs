@@ -8,7 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 
-namespace RecipeTreeApp;
+namespace Mcrpv;
 
 public partial class MainWindow : Window
 {

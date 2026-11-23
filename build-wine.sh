@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build PO3 Mythic Recipe Tree as a self-contained single-file Windows exe that runs under Wine.
+# Build MCRPV (Minecraft Recipe Tree Viewer) as a self-contained single-file Windows exe that runs under Wine.
 #
 # Usage:
 #   ./build-wine.sh              build into dist/wine-x64 next to the project
@@ -23,8 +23,8 @@
 # live somewhere else.
 set -euo pipefail
 
-APP='PO3 Mythic Recipe Tree'
-PROJECT_REL='PO3RecipeTree/PO3RecipeTree.csproj'   # relative to this script
+APP='MCRPV'
+PROJECT_REL='MCRPV/MCRPV.csproj'   # relative to this script
 OUTPUT_REL='dist/wine-x64'     # relative to the project directory
 
 DRY_RUN=0

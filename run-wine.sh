@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch PO3 Mythic Recipe Tree from its published build.
+# Launch MCRPV (Minecraft Recipe Tree Viewer) from its published build.
 #
 # Usage:
 #   ./run-wine.sh [args...]
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXE="${EXE:-PO3RecipeTree/dist/wine-x64/PO3 Mythic Recipe Tree.exe}"
+EXE="${EXE:-MCRPV/dist/wine-x64/MCRPV.exe}"
 export WINEPREFIX="${WINEPREFIX:-$HOME/.wine-apps}"
 
 command -v wine >/dev/null || { echo "error: wine is not on PATH" >&2; exit 1; }

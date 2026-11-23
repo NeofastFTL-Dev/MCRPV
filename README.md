@@ -1,9 +1,10 @@
-# PO3 Mythic Recipe Tree
+# MCRPV — Minecraft Recipe Tree Viewer
 
 A small WPF desktop app that expands a single item into its **full recursive crafting tree**.
-It was written for the mythic recipes of *Project Ozone 3* (1.12.2), where a late-game item can sit
-six or seven crafting steps away from anything you can actually mine — and the whole point is to see
-that chain at once instead of clicking through JEI.
+It was originally written for the mythic recipes of *Project Ozone 3* (1.12.2), where a late-game
+item can sit six or seven crafting steps away from anything you can actually mine — and the whole
+point is to see that chain at once instead of clicking through JEI. Nothing in the app is specific
+to that pack, so the name is generic: any recipe set you can write as a JSON dictionary works.
 
 Recipes live in a plain `recipes.json`, so the same app works for any pack whose recipes you can
 express as "item → list of ingredients".
@@ -47,11 +48,11 @@ needed to share a tree.
 
 | Path | What |
 |---|---|
-| `PO3RecipeTree/` | the WPF project (`net8.0-windows`, assembly name `PO3 Mythic Recipe Tree`) |
-| `PO3RecipeTree/MainWindow.xaml` | layout and both themes' brushes |
-| `PO3RecipeTree/MainWindow.xaml.cs` | tree building, bracket rendering, filter, exports |
-| `PO3RecipeTree/recipes.json` | the recipe database, copied next to the exe on every build |
-| `PO3RecipeTree/dist/wine-x64/` | the published single-file build (not committed) |
+| `MCRPV/` | the WPF project (`net8.0-windows`, assembly name `MCRPV`) |
+| `MCRPV/MainWindow.xaml` | layout and both themes' brushes |
+| `MCRPV/MainWindow.xaml.cs` | tree building, bracket rendering, filter, exports |
+| `MCRPV/recipes.json` | the recipe database, copied next to the exe on every build |
+| `MCRPV/dist/wine-x64/` | the published single-file build (not committed) |
 
 ## The recipe file
 
@@ -83,8 +84,8 @@ Rules:
 * If no `recipes.json` sits next to the exe, the app writes a small starter file there so it can always
   start; replace it with your own.
 
-The bundled file holds a handful of demo recipes only. A full PO3 database can be generated with the
-companion JEIConverter project from a JEIExporter dump.
+The bundled file holds a handful of demo recipes only. A full Project Ozone 3 database can be generated with the companion
+[JEIConverter](https://github.com/NeofastFTL-Dev/JEIConverter) project from a JEIExporter dump.
 
 ## Building on this machine
 
@@ -96,7 +97,7 @@ The app is WPF, so it only targets Windows (`net8.0-windows`). Two toolchains ex
 
 ### Windows / Visual Studio
 
-Open `PO3RecipeTree/PO3RecipeTree.csproj` (or the folder) in Visual Studio 2022 with the
+Open `MCRPV/MCRPV.csproj` (or the folder) in Visual Studio 2022 with the
 **.NET desktop development** workload, then press F5.
 
 ### Cross-build on Linux (the route used for `dist/wine-x64`)
@@ -104,7 +105,7 @@ Open `PO3RecipeTree/PO3RecipeTree.csproj` (or the folder) in Visual Studio 2022 
 The repository carries the script that does the whole sequence below:
 
 ```bash
-./build-wine.sh              # -> PO3RecipeTree/dist/wine-x64/PO3 Mythic Recipe Tree.exe
+./build-wine.sh              # -> MCRPV/dist/wine-x64/MCRPV.exe
 ./build-wine.sh --dry-run    # print the three commands instead
 ```
 
@@ -112,20 +113,20 @@ By hand, restore with the Linux SDK first — restore has to fetch the Windows t
 Wine-side NuGet cannot complete HTTPS requests on this machine.
 
 ```bash
-cd PO3RecipeTree
-~/.dotnet/dotnet restore PO3RecipeTree.csproj -r win-x64 -p:EnableWindowsTargeting=true
+cd MCRPV
+~/.dotnet/dotnet restore MCRPV.csproj -r win-x64 -p:EnableWindowsTargeting=true
 ```
 
 Then publish with the Wine SDK, which has the real Windows targeting packs:
 
 ```bash
-WINEPREFIX=~/.wine-dotnet wine 'C:\dotnet\dotnet.exe' publish PO3RecipeTree.csproj \
+WINEPREFIX=~/.wine-dotnet wine 'C:\dotnet\dotnet.exe' publish MCRPV.csproj \
   -c Release -r win-x64 --self-contained true --no-restore \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
   -p:DebugType=none -o dist/wine-x64
 ```
 
-That produces `dist/wine-x64/PO3 Mythic Recipe Tree.exe` (about 160 MB, everything bundled, no .NET
+That produces `dist/wine-x64/MCRPV.exe` (about 160 MB, everything bundled, no .NET
 install needed on the target) plus `recipes.json`, which must stay in the same folder as the exe.
 The publish step takes a few minutes under Wine; the `--no-restore` flag is deliberate, the RID-specific
 assets come from the Linux restore above.
@@ -139,14 +140,15 @@ assets come from the Linux restore above.
 which runs the equivalent of:
 
 ```bash
-WINEPREFIX=~/.wine-apps wine "PO3RecipeTree/dist/wine-x64/PO3 Mythic Recipe Tree.exe"
+WINEPREFIX=~/.wine-apps wine "MCRPV/dist/wine-x64/MCRPV.exe"
 ```
 
 WPF needs core fonts in the prefix or it aborts while shaping text at startup; install them once
 with `WINEPREFIX=~/.wine-apps winetricks -q corefonts`.
 
-A 256 px icon lives at `~/.local/share/icons/hicolor/256x256/apps/po3-mythic-recipe-tree.png` and is
-used by the Linux desktop entry. Note that `ApplicationIcon` in the `.csproj` is empty, so the exe
+A 256 px icon lives at `~/.local/share/icons/hicolor/256x256/apps/mcrpv.png` and is used by the
+Linux desktop entry (`mcrpv.desktop`), which resolves the project folder at launch instead of
+baking in an absolute path. Note that `ApplicationIcon` in the `.csproj` is empty, so the exe
 itself still ships without an embedded icon; setting it to an `.ico` would fix the Windows taskbar.
 
 ## Screenshots

@@ -7,8 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon></ApplicationIcon>
-    <AssemblyName>PO3 Mythic Recipe Tree</AssemblyName>
-    <RootNamespace>RecipeTreeApp</RootNamespace>
+    <AssemblyName>MCRPV</AssemblyName>
+    <RootNamespace>Mcrpv</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
