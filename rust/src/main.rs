@@ -11,9 +11,11 @@ mod lang;
 mod layers;
 mod model;
 mod names;
+mod picker;
 mod plan;
 mod search;
 mod selftest;
+mod settings;
 mod tree;
 
 use eframe::egui;
@@ -45,7 +47,8 @@ fn main() {
         None => default_data_dir(),
     };
 
-    lang::set(&settings_language(&data_dir));
+    let settings = settings::Settings::load(&data_dir);
+    lang::set(&settings.language());
     let names = Names::load_file(&data_dir.join("names.json"));
     let (recipes, source) = load_recipes(&data_dir);
     let index = SearchIndex::build(recipes.keys().iter().cloned(), &names);
@@ -67,7 +70,9 @@ fn main() {
     let result = eframe::run_native(
         "MCRPV 🌸",
         options,
-        Box::new(move |cc| Ok(Box::new(App::new(cc, recipes, names, index, status)))),
+        Box::new(move |cc| {
+            Ok(Box::new(App::new(cc, recipes, names, index, status, data_dir.clone(), settings)))
+        }),
     );
     if let Err(error) = result {
         eprintln!("MCRPV: {error}");
@@ -99,20 +104,6 @@ fn default_data_dir() -> PathBuf {
     }
     let _ = std::fs::create_dir_all(&dir);
     dir
-}
-
-fn settings_language(data_dir: &Path) -> String {
-    let Ok(text) = std::fs::read_to_string(data_dir.join("settings.json")) else {
-        return lang::DEFAULT.to_string();
-    };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
-        return lang::DEFAULT.to_string();
-    };
-    value
-        .get("Language")
-        .and_then(|code| code.as_str())
-        .map(|code| lang::normalize(Some(code)))
-        .unwrap_or_else(|| lang::DEFAULT.to_string())
 }
 
 /// The data folder first; when it is empty, the sample that ships with the repository, so a fresh
@@ -159,6 +150,11 @@ struct App {
     language: String,
     tab: Tab,
     plan: Option<plan::StepPlan>,
+    data_dir: PathBuf,
+    settings: settings::Settings,
+    picks: settings::Picks,
+    picker: picker::Picker,
+    show_prefs: bool,
 }
 
 impl App {
@@ -168,8 +164,11 @@ impl App {
         names: Names,
         index: SearchIndex,
         status: String,
+        data_dir: PathBuf,
+        settings: settings::Settings,
     ) -> Self {
         let layer_line = layers::summary(&layers::counts(&recipes));
+        let picks = settings::Picks::from_settings(&settings);
 
         let mut style = (*cc.egui_ctx.style()).clone();
         style.visuals = egui::Visuals::dark();
@@ -195,16 +194,36 @@ impl App {
             language: lang::code(),
             tab: Tab::Tree,
             plan: None,
+            data_dir,
+            settings,
+            picks,
+            picker: picker::Picker::default(),
+            show_prefs: false,
         }
     }
 
     fn build_tree(&mut self) {
         if let Some(item) = self.selected.clone() {
-            let root = tree::build(&item, self.quantity.max(1), &self.recipes, &self.limits);
+            let root = tree::build_with(
+                &item,
+                self.quantity.max(1),
+                &self.recipes,
+                &self.limits,
+                &self.picks,
+            );
             // The plan is built from the same tree, so it follows the recipes and machines the
             // planner picked instead of guessing from the recipe set.
             self.plan = Some(plan::build(&root, &self.recipes));
             self.root = Some(root);
+        }
+    }
+
+    /// Writes the picks and the picker filter into the shared settings.json.
+    fn persist_picks(&mut self) {
+        self.settings.set_picks(&self.picks);
+        self.settings.machine_filter = self.picker.filter().to_string();
+        if let Err(error) = self.settings.save(&self.data_dir) {
+            eprintln!("MCRPV: settings niet bewaard: {error}");
         }
     }
 
@@ -247,6 +266,16 @@ impl eframe::App for App {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.tab, Tab::Tree, "🌳 RECIPE TREE");
                 ui.selectable_value(&mut self.tab, Tab::Plan, lang::t("header.plan"));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let label = format!("★ {} · {}", lang::t("pref.title"), self.picks.len());
+                    if ui
+                        .selectable_label(self.show_prefs, label)
+                        .on_hover_text(lang::t("pick.setpref.tip"))
+                        .clicked()
+                    {
+                        self.show_prefs = !self.show_prefs;
+                    }
+                });
             });
 
             ui.horizontal(|ui| {
@@ -308,7 +337,7 @@ impl eframe::App for App {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            let Some(root) = &self.root else {
+            let Some(root) = self.root.take() else {
                 ui.centered_and_justified(|ui| {
                     ui.label(egui::RichText::new("Kies een item aan de linkerkant om de boom te bouwen").color(MUTED));
                 });
@@ -317,7 +346,7 @@ impl eframe::App for App {
 
             match self.tab {
                 Tab::Tree => {
-                    let (crafts, bases) = tree::totals(root);
+                    let (crafts, bases) = tree::totals(&root);
                     ui.horizontal(|ui| {
                         ui.label(
                             egui::RichText::new(format!("{} ×{}", self.names.display(&root.name), root.quantity))
@@ -333,14 +362,20 @@ impl eframe::App for App {
                     });
 
                     ui.separator();
+                    let mut open_picker: Option<(String, usize)> = None;
                     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                        render_node(ui, root, &self.names);
+                        render_node(ui, &root, &self.names, &mut open_picker);
                     });
+
+                    if let Some((item, index)) = open_picker {
+                        let filter = self.settings.machine_filter.clone();
+                        self.picker.open_for(&item, index, &filter);
+                    }
 
                     ui.separator();
                     ui.checkbox(&mut self.show_bracket, lang::t("tab.bracket.tip"));
                     if self.show_bracket {
-                        let text = tree::bracket_text(root, &self.names);
+                        let text = tree::bracket_text(&root, &self.names);
                         ui.add(egui::TextEdit::multiline(&mut text.as_str()).desired_rows(12));
                     }
                 }
@@ -361,12 +396,52 @@ impl eframe::App for App {
                     }
                 }
             }
+
+            self.root = Some(root);
         });
+
+        // Machine picker: choosing a recipe or pinning a ★ rebuilds the tree and the plan.
+        let was_open = self.picker.is_open();
+        if let Some(action) = self.picker.ui(ctx, &self.recipes, &self.names, &self.picks) {
+            let item = self.picker.item().to_string();
+            match action {
+                picker::Action::Chose(index) => self.picks.set_choice(&item, index),
+                picker::Action::Prefer(machine) => self.picks.set_preference(&item, &machine),
+                picker::Action::ClearPreference => self.picks.clear_preference(&item),
+            }
+            self.picker.close();
+            self.persist_picks();
+            self.build_tree();
+        } else if was_open && !self.picker.is_open() {
+            // Closed with esc or the window button: still remember the filter you typed.
+            self.persist_picks();
+        }
+
+        if self.show_prefs {
+            if let Some(action) =
+                picker::preferences_window(ctx, &self.picks, &self.names, &mut self.show_prefs)
+            {
+                match action {
+                    picker::PrefAction::Remove(item) => self.picks.clear_preference(&item),
+                    picker::PrefAction::ClearAll => self.picks.clear_all_preferences(),
+                }
+                self.persist_picks();
+                self.build_tree();
+            }
+        }
     }
 }
 
-fn render_node(ui: &mut egui::Ui, node: &Node, names: &Names) {
+fn render_node(
+    ui: &mut egui::Ui,
+    node: &Node,
+    names: &Names,
+    open_picker: &mut Option<(String, usize)>,
+) {
     let mut label = names.display(&node.name).to_string();
+    if node.preferred {
+        label.insert_str(0, "★ ");
+    }
     if node.quantity > 1 {
         label.push_str(&format!(" ×{}", node.quantity));
     }
@@ -383,6 +458,7 @@ fn render_node(ui: &mut egui::Ui, node: &Node, names: &Names) {
             if !node.category.is_empty() {
                 ui.weak(format!("· {}", node.category));
             }
+            machine_button(ui, node, open_picker);
         });
         return;
     }
@@ -390,17 +466,34 @@ fn render_node(ui: &mut egui::Ui, node: &Node, names: &Names) {
     egui::CollapsingHeader::new(label)
         .default_open(true)
         .show(ui, |ui| {
-            if !node.category.is_empty() {
-                if node.has_choice() {
-                    ui.weak(format!("{} · {}/{}", node.category, node.option_index + 1, node.option_count));
-                } else {
-                    ui.weak(node.category.clone());
+            ui.horizontal(|ui| {
+                if !node.category.is_empty() {
+                    if node.has_choice() {
+                        ui.weak(format!("{} · {}/{}", node.category, node.option_index + 1, node.option_count));
+                    } else {
+                        ui.weak(node.category.clone());
+                    }
                 }
-            }
+                machine_button(ui, node, open_picker);
+            });
             for child in &node.children {
-                render_node(ui, child, names);
+                render_node(ui, child, names, open_picker);
             }
         });
+}
+
+/// The ⚙ next to an item that can be made more than one way: opens the machine picker.
+fn machine_button(ui: &mut egui::Ui, node: &Node, open_picker: &mut Option<(String, usize)>) {
+    if !node.has_choice() {
+        return;
+    }
+    if ui
+        .small_button("⚙")
+        .on_hover_text(lang::t("pick.title"))
+        .clicked()
+    {
+        *open_picker = Some((node.name.clone(), node.option_index));
+    }
 }
 
 fn render_plan(ui: &mut egui::Ui, plan: &plan::StepPlan, names: &Names) {

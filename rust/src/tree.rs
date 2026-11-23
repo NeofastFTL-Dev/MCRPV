@@ -3,6 +3,7 @@
 //! "sane option" pick that avoids recipes eating their own output or reverse pairs.
 
 use crate::model::RecipeSet;
+use crate::settings::Picks;
 use std::collections::{HashMap, HashSet};
 
 pub const MAX_TREE_NODES: i64 = 3_000;
@@ -47,6 +48,8 @@ pub struct Node {
     pub option_index: usize,
     pub option_count: usize,
     pub source: String,
+    /// The recipe came from a ★ machine preference, not from the automatic pick.
+    pub preferred: bool,
 }
 
 impl Node {
@@ -89,6 +92,18 @@ const TRANSFORM_CATEGORIES: &[&str] = &[
 const BUY_CATEGORIES: &[&str] = &["Market", "Amadron Tablet"];
 
 pub fn build(item: &str, quantity: i64, recipes: &RecipeSet, limits: &PlannerLimits) -> Node {
+    build_with(item, quantity, recipes, limits, &Picks::default())
+}
+
+/// Same as `build`, but the ★ preferences and hand-picked recipes decide which option a step
+/// uses. A hand-picked or ★ recipe is always followed, even when it is a gathering recipe.
+pub fn build_with(
+    item: &str,
+    quantity: i64,
+    recipes: &RecipeSet,
+    limits: &PlannerLimits,
+    picks: &Picks,
+) -> Node {
     let limits = limits.clamped();
     let products = quantity.max(1);
     let mut budget = MAX_TREE_NODES;
@@ -108,6 +123,7 @@ pub fn build(item: &str, quantity: i64, recipes: &RecipeSet, limits: &PlannerLim
         &mut path,
         0,
         &mut chain_costs,
+        picks,
     )
 }
 
@@ -122,6 +138,7 @@ fn build_node(
     path: &mut HashSet<String>,
     depth: i32,
     chain_costs: &mut HashMap<String, i64>,
+    picks: &Picks,
 ) -> Node {
     let mut node = Node { name: item.to_string(), quantity, ..Node::default() };
 
@@ -150,18 +167,42 @@ fn build_node(
 
     let options = recipe.options();
     let mut option_index = 0usize;
-    let used = {
+    let mut preferred = false;
+    let mut chosen_by_hand = false;
+
+    // ★ first: the machine you pinned for this item wins over everything else.
+    if let Some(wanted) = picks.preference(item) {
+        for (index, option) in options.iter().enumerate() {
+            if option.category.eq_ignore_ascii_case(wanted) {
+                option_index = index;
+                preferred = true;
+                break;
+            }
+        }
+    }
+
+    if !preferred {
+        if let Some(chosen) = picks.choice(item) {
+            option_index = chosen.min(options.len() - 1);
+            chosen_by_hand = true;
+        }
+    }
+
+    if !preferred && !chosen_by_hand {
         option_index = pick_sane_option(item, &options, option_index, recipes, chain_costs);
-        options[option_index]
-    };
+    }
+
+    let used = options[option_index];
 
     node.category = used.category.clone();
     node.source = used.source.clone();
     node.option_index = option_index;
     node.option_count = options.len();
+    node.preferred = preferred;
 
-    // Farming, sieving, buying and converting are gathering, not crafting steps.
-    if is_gathering(used) {
+    // Farming, sieving, buying and converting are gathering, not crafting steps — unless you
+    // picked that recipe yourself (or pinned its machine), then the chain is calculated through.
+    if !preferred && !chosen_by_hand && is_gathering(used) {
         *base_left -= quantity;
         return node;
     }
@@ -197,6 +238,7 @@ fn build_node(
             path,
             depth + 1,
             chain_costs,
+            picks,
         ));
     }
 

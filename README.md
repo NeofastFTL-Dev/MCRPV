@@ -184,6 +184,12 @@ before that.
   crafting step grouped per machine in the order the machines are last needed, with per-step
   quantities, ingredient totals, the layer a recipe came from (`RecipeLayers`: 📦 base, 🧱 dump,
   🧩 pack) and truncated-branch warnings — on screen and as plain text.
+* Machine picker (⚙ on a tree node, a port of `MachinePicker`): every way an item can be made,
+  grouped per JEI tab with a filter, ☆/★ to pin a machine for that item, a click to use one recipe
+  once, and a ★ overview to review or drop the pins. Both live in the same `settings.json` the .NET
+  app uses (`MachinePreferences`, `RecipeChoices`, `MachineFilter`), and unknown keys are carried
+  through untouched; ★ wins over a manual choice, and either is followed by the planner even when
+  the recipe is normally a gathering step.
 * A headless self-test: `--selftest` (48 checks, what CI runs).
 
 ```bash
@@ -197,7 +203,7 @@ The data folder is the one the .NET app used — `%LOCALAPPDATA%\MCRPV` on Windo
 `$XDG_DATA_HOME/mcrpv` (or `~/.local/share/mcrpv`) elsewhere — and an existing `PO3RecipeTree` folder
 is moved across on first start.
 
-**Stage 2** covers everything still on the .NET side: the machine picker with ★ preferences, the
+**Stage 2** covers everything still on the .NET side: the
 shopping list over JEI bookmarks, instance and bookmark discovery with the watch folder, the
 per-pack mod index (`pack.json` + jar shards) with provenance, the dead-patch and changes views, and
 the exports (clipboard, `.txt`, PNG bracket diagram) plus the light/dark themes. Only after that does

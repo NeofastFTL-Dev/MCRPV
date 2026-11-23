@@ -4,7 +4,9 @@
 use crate::lang;
 use crate::layers;
 use crate::model::RecipeSet;
+use crate::picker;
 use crate::plan;
+use crate::settings::{Picks, Settings};
 use crate::names::{self, Names};
 use crate::search::SearchIndex;
 use crate::tree::{self, PlannerLimits};
@@ -30,6 +32,24 @@ const UI_KEYS: &[&str] = &[
     "plan.cut.warn",
     "plan.cut.advice",
     "plan.cutnote",
+    "pick.title",
+    "pick.heading",
+    "pick.preference",
+    "pick.clear.tip",
+    "pick.search.tip",
+    "pick.count.machines",
+    "pick.none",
+    "pick.preferred.tip",
+    "pick.setpref.tip",
+    "pref.title",
+    "pref.header",
+    "pref.count",
+    "pref.count.one",
+    "pref.clearall",
+    "pref.remove.tip",
+    "pref.empty",
+    "plan.machine.recipe",
+    "preview.noinput",
 ];
 
 pub fn run() -> i32 {
@@ -287,6 +307,137 @@ pub fn run() -> i32 {
         lang::format("plan.machine", &["X", "3"]).contains("X") && lang::format("plan.machine", &["X", "3"]).contains("3 stap"),
         "taal: placeholders gevuld"
     );
+
+    // ---------- machine preferences and manual choices ----------
+    let pick_set = RecipeSet::from_json(
+        r#"{
+            "gear": {"Category": "Crafting", "Ingredients": [{"Item": "iron"}],
+                     "Alternatives": [{"Category": "Furnace", "Ingredients": [{"Item": "iron", "Count": 2}]}]},
+            "iron": {"Ingredients": []}
+        }"#,
+    )
+    .unwrap();
+
+    let automatic = tree::build("gear", 1, &pick_set, &limits);
+    check!(
+        automatic.option_index == 0 && !automatic.preferred,
+        "voorkeur: zonder keuze de gewone pick"
+    );
+
+    let mut picks = Picks::default();
+    picks.set_preference("GEAR", "furnace");
+    let starred = tree::build_with("gear", 1, &pick_set, &limits, &picks);
+    check!(
+        starred.option_index == 1 && starred.preferred,
+        "voorkeur: ★-machine wint (case-insensitive)"
+    );
+    check!(
+        starred.category == "Furnace" && starred.children[0].quantity == 2,
+        "voorkeur: boom volgt het ★-recept"
+    );
+
+    picks.set_choice("gear", 1);
+    picks.set_preference("gear", "Crafting");
+    let both = tree::build_with("gear", 1, &pick_set, &limits, &picks);
+    check!(
+        both.option_index == 0 && both.preferred,
+        "voorkeur: ★ gaat vóór een handmatige keuze"
+    );
+
+    picks.clear_preference("gear");
+    let hand = tree::build_with("gear", 1, &pick_set, &limits, &picks);
+    check!(
+        hand.option_index == 1 && !hand.preferred,
+        "voorkeur: handmatige keuze blijft bewaard"
+    );
+
+    picks.set_preference("gear", "Alloy Smelter");
+    let missing = tree::build_with("gear", 1, &pick_set, &limits, &picks);
+    check!(
+        missing.option_index == 1 && !missing.preferred,
+        "voorkeur: onbekende machine valt terug op de keuze"
+    );
+
+    let gather_pick = RecipeSet::from_json(
+        r#"{"wheat": {"Category": "Crop Produce", "Ingredients": [{"Item": "wheat_seeds"}]},
+            "wheat_seeds": {"Ingredients": []}}"#,
+    )
+    .unwrap();
+    check!(
+        tree::build("wheat", 1, &gather_pick, &limits).children.is_empty(),
+        "voorkeur: verzamelen stopt standaard"
+    );
+    let mut seed_picks = Picks::default();
+    seed_picks.set_preference("wheat", "Crop Produce");
+    check!(
+        !tree::build_with("wheat", 1, &gather_pick, &limits, &seed_picks)
+            .children
+            .is_empty(),
+        "voorkeur: ★ rekent verzamelen wél door"
+    );
+
+    check!(
+        picker::machine_name(pick_set.get("gear").unwrap().options()[1]) == "Furnace",
+        "picker: machinenaam"
+    );
+    let unnamed = RecipeSet::from_json(r#"{"x": {"Ingredients": [{"Item": "y"}]}}"#).unwrap();
+    check!(
+        picker::machine_name(unnamed.get("x").unwrap()) == lang::t("plan.machine.recipe"),
+        "picker: terugvalnaam zonder machine"
+    );
+
+    // ---------- settings.json, shared with the .NET app ----------
+    let temp = std::env::temp_dir().join(format!("mcrpv-selftest-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&temp);
+
+    let mut settings = Settings {
+        language: Some("EN".to_string()),
+        machine_filter: "fur".to_string(),
+        bookmark_source: Some("C:/x/bookmarks.ini".to_string()),
+        ..Settings::default()
+    };
+    settings
+        .other
+        .insert("SomeFutureSetting".to_string(), serde_json::json!(42));
+    settings.set_picks(&picks);
+    settings.save(&temp).unwrap();
+
+    let reloaded = Settings::load(&temp);
+    check!(
+        reloaded.language() == "en" && reloaded.machine_filter == "fur",
+        "instellingen: taal en filter bewaard"
+    );
+    check!(
+        reloaded.machine_preferences.get("gear").map(String::as_str) == Some("Alloy Smelter"),
+        "instellingen: voorkeur bewaard"
+    );
+    check!(
+        reloaded.recipe_choices.get("gear") == Some(&1),
+        "instellingen: keuze bewaard"
+    );
+    check!(
+        reloaded.bookmark_source.as_deref() == Some("C:/x/bookmarks.ini"),
+        "instellingen: bestaande .NET-sleutel bewaard"
+    );
+    check!(
+        reloaded.other.get("SomeFutureSetting") == Some(&serde_json::json!(42)),
+        "instellingen: onbekende sleutels blijven staan"
+    );
+
+    let back = Picks::from_settings(&reloaded);
+    check!(
+        back.preference("GEAR") == Some("Alloy Smelter") && back.choice("gear") == Some(1),
+        "instellingen: picks teruggelezen"
+    );
+
+    let broken = temp.join("broken");
+    std::fs::create_dir_all(&broken).unwrap();
+    std::fs::write(broken.join("settings.json"), "{niet json").unwrap();
+    check!(
+        Settings::load(&broken).language.is_none(),
+        "instellingen: kapotte json geeft standaardwaarden"
+    );
+    let _ = std::fs::remove_dir_all(&temp);
 
     // ---------- the sample that ships with the repo ----------
     let bundled = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
