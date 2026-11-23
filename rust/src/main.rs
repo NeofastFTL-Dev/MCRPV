@@ -8,8 +8,10 @@
 //! names.json instead of the local data folder.
 
 mod lang;
+mod layers;
 mod model;
 mod names;
+mod plan;
 mod search;
 mod selftest;
 mod tree;
@@ -24,6 +26,13 @@ use tree::{Node, PlannerLimits};
 const ORANGE: egui::Color32 = egui::Color32::from_rgb(255, 136, 0);
 const BACK: egui::Color32 = egui::Color32::from_rgb(18, 18, 24);
 const MUTED: egui::Color32 = egui::Color32::from_rgb(170, 170, 185);
+const WARN: egui::Color32 = egui::Color32::from_rgb(255, 196, 87);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Tab {
+    Tree,
+    Plan,
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -136,6 +145,7 @@ struct App {
     names: Names,
     index: SearchIndex,
     status: String,
+    layer_line: String,
 
     query: String,
     last_query: String,
@@ -145,7 +155,10 @@ struct App {
     root: Option<Node>,
     limits: PlannerLimits,
     show_bracket: bool,
+    show_plan_text: bool,
     language: String,
+    tab: Tab,
+    plan: Option<plan::StepPlan>,
 }
 
 impl App {
@@ -156,6 +169,8 @@ impl App {
         index: SearchIndex,
         status: String,
     ) -> Self {
+        let layer_line = layers::summary(&layers::counts(&recipes));
+
         let mut style = (*cc.egui_ctx.style()).clone();
         style.visuals = egui::Visuals::dark();
         style.visuals.panel_fill = BACK;
@@ -167,6 +182,7 @@ impl App {
             names,
             index,
             status,
+            layer_line,
             query: String::new(),
             last_query: String::from("\u{0}"),
             results: Vec::new(),
@@ -175,13 +191,20 @@ impl App {
             root: None,
             limits: PlannerLimits::default(),
             show_bracket: false,
+            show_plan_text: false,
             language: lang::code(),
+            tab: Tab::Tree,
+            plan: None,
         }
     }
 
     fn build_tree(&mut self) {
         if let Some(item) = self.selected.clone() {
-            self.root = Some(tree::build(&item, self.quantity.max(1), &self.recipes, &self.limits));
+            let root = tree::build(&item, self.quantity.max(1), &self.recipes, &self.limits);
+            // The plan is built from the same tree, so it follows the recipes and machines the
+            // planner picked instead of guessing from the recipe set.
+            self.plan = Some(plan::build(&root, &self.recipes));
+            self.root = Some(root);
         }
     }
 
@@ -220,6 +243,11 @@ impl eframe::App for App {
                 });
             });
             ui.separator();
+
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.tab, Tab::Tree, "🌳 RECIPE TREE");
+                ui.selectable_value(&mut self.tab, Tab::Plan, lang::t("header.plan"));
+            });
 
             ui.horizontal(|ui| {
                 ui.label("🧱 ITEM");
@@ -270,6 +298,8 @@ impl eframe::App for App {
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.weak(&self.status);
+                ui.separator();
+                ui.weak(&self.layer_line);
                 if let Some(item) = &self.selected {
                     ui.separator();
                     ui.weak(format!("gekozen: {}", self.names.display(item)));
@@ -285,31 +315,51 @@ impl eframe::App for App {
                 return;
             };
 
-            let (crafts, bases) = tree::totals(root);
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(format!("{} ×{}", self.names.display(&root.name), root.quantity))
-                        .size(20.0)
-                        .strong()
-                        .color(ORANGE),
-                );
-                if !self.recipes.contains(&root.name) {
-                    ui.weak("⚠ geen recept");
+            match self.tab {
+                Tab::Tree => {
+                    let (crafts, bases) = tree::totals(root);
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(format!("{} ×{}", self.names.display(&root.name), root.quantity))
+                                .size(20.0)
+                                .strong()
+                                .color(ORANGE),
+                        );
+                        if !self.recipes.contains(&root.name) {
+                            ui.weak("⚠ geen recept");
+                        }
+                        ui.weak(format!("STAPPEN: {crafts}"));
+                        ui.weak(format!("BASIS: {bases}"));
+                    });
+
+                    ui.separator();
+                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                        render_node(ui, root, &self.names);
+                    });
+
+                    ui.separator();
+                    ui.checkbox(&mut self.show_bracket, lang::t("tab.bracket.tip"));
+                    if self.show_bracket {
+                        let text = tree::bracket_text(root, &self.names);
+                        ui.add(egui::TextEdit::multiline(&mut text.as_str()).desired_rows(12));
+                    }
                 }
-                ui.weak(format!("STAPPEN: {crafts}"));
-                ui.weak(format!("BASIS: {bases}"));
-            });
-
-            ui.separator();
-            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                render_node(ui, root, &self.names);
-            });
-
-            ui.separator();
-            ui.checkbox(&mut self.show_bracket, lang::t("tab.bracket.tip"));
-            if self.show_bracket {
-                let text = tree::bracket_text(root, &self.names);
-                ui.add(egui::TextEdit::multiline(&mut text.as_str()).desired_rows(12));
+                Tab::Plan => {
+                    if let Some(plan) = self.plan.take() {
+                        let mut show_text = self.show_plan_text;
+                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                            render_plan(ui, &plan, &self.names);
+                            ui.separator();
+                            ui.checkbox(&mut show_text, "platte tekst");
+                            if show_text {
+                                let text = plan::text(&plan, &self.names);
+                                ui.add(egui::TextEdit::multiline(&mut text.as_str()).desired_rows(18));
+                            }
+                        });
+                        self.show_plan_text = show_text;
+                        self.plan = Some(plan);
+                    }
+                }
             }
         });
     }
@@ -351,4 +401,88 @@ fn render_node(ui: &mut egui::Ui, node: &Node, names: &Names) {
                 render_node(ui, child, names);
             }
         });
+}
+
+fn render_plan(ui: &mut egui::Ui, plan: &plan::StepPlan, names: &Names) {
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(format!("{} ×{}", names.display(&plan.root), plan.quantity))
+                .size(20.0)
+                .strong()
+                .color(ORANGE),
+        );
+        ui.weak(format!("{}: {}", lang::t("lbl.steps"), plan.machines.len()));
+    });
+    ui.weak(plan.summary());
+    ui.separator();
+
+    ui.label(egui::RichText::new(lang::t("plan.base")).strong());
+    if plan.base.is_empty() {
+        ui.weak(lang::t("plan.base.none"));
+    } else {
+        for item in &plan.base {
+            ui.horizontal(|ui| {
+                ui.label(names.display(&item.name));
+                ui.weak(format!("× {}", item.quantity));
+                if item.cut {
+                    ui.colored_label(WARN, lang::t("plan.cut"));
+                }
+            });
+        }
+    }
+
+    ui.separator();
+    ui.label(egui::RichText::new(lang::t("plan.steps")).strong());
+    if plan.is_empty() {
+        ui.weak(lang::t("plan.steps.norecipe"));
+    }
+
+    for block in &plan.machines {
+        egui::CollapsingHeader::new(lang::format(
+            "plan.machine",
+            &[&block.machine, &block.steps.len().to_string()],
+        ))
+        .default_open(true)
+        .show(ui, |ui| {
+            for (index, step) in block.steps.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.weak(format!("{:>2}.", index + 1));
+                    ui.label(egui::RichText::new(names.display(&step.name)).strong())
+                        .on_hover_text(format!("{}: {}", lang::t("plan.machine"), step.machine));
+                    ui.weak(format!("× {}", step.quantity));
+                    if step.crafts > 1 {
+                        ui.weak(format!("({}×)", step.crafts));
+                    }
+                    ui.weak(format!("{} {}", step.layer.icon(), step.layer.label()));
+                    if !step.source.is_empty() {
+                        ui.weak(&step.source);
+                    }
+                });
+
+                if !step.ingredients.is_empty() {
+                    let parts: Vec<String> = step
+                        .ingredients
+                        .iter()
+                        .map(|(item, count)| format!("{} × {}", names.display(item), count))
+                        .collect();
+                    ui.weak(format!("     ← {}", parts.join(", ")));
+                }
+            }
+        });
+    }
+
+    if plan.cut_count > 0 {
+        ui.separator();
+        ui.colored_label(WARN, lang::format("plan.cut.warn", &[&plan.cut_count.to_string()]));
+        ui.weak(lang::t("plan.cut.advice"));
+    }
+
+    ui.separator();
+    ui.label(
+        egui::RichText::new(lang::format(
+            "plan.product",
+            &[&names.display(&plan.root), &plan.quantity.to_string()],
+        ))
+        .strong(),
+    );
 }

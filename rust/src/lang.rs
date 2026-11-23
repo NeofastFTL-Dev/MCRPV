@@ -69,6 +69,15 @@ fn table(code: &str) -> &'static BTreeMap<String, String> {
         .unwrap_or(&tables()[0].1)
 }
 
+/// A key with its `{0}`, `{1}`, … placeholders filled in, the way `Lang.T` did.
+pub fn format(key: &str, args: &[&str]) -> String {
+    let mut out = t(key);
+    for (index, value) in args.iter().enumerate() {
+        out = out.replace(&format!("{{{index}}}"), value);
+    }
+    out
+}
+
 /// The text for a key, falling back to Dutch and then to a visible marker.
 pub fn t(key: &str) -> String {
     if let Some(text) = table(&code()).get(key) {

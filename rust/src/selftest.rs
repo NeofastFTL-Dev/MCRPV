@@ -2,7 +2,9 @@
 //! `.NET`-free build, and mirror the parts of `SelfTest.cs` that this stage covers.
 
 use crate::lang;
+use crate::layers;
 use crate::model::RecipeSet;
+use crate::plan;
 use crate::names::{self, Names};
 use crate::search::SearchIndex;
 use crate::tree::{self, PlannerLimits};
@@ -15,6 +17,19 @@ const UI_KEYS: &[&str] = &[
     "tip.item",
     "tab.bracket.tip",
     "header.plan",
+    "plan.base",
+    "plan.base.none",
+    "plan.steps",
+    "plan.steps.norecipe",
+    "plan.steps.count",
+    "plan.machine",
+    "plan.machine.other",
+    "plan.product",
+    "plan.summary",
+    "plan.cut",
+    "plan.cut.warn",
+    "plan.cut.advice",
+    "plan.cutnote",
 ];
 
 pub fn run() -> i32 {
@@ -170,6 +185,107 @@ pub fn run() -> i32 {
     check!(
         index.search("iron ingot", 10).first().map(|entry| entry.key.as_str()) == Some("iron_ingot"),
         "zoeken: genormaliseerde invoer"
+    );
+
+    // ---------- step plan (RecipePlanner.BuildStepPlan) ----------
+    let plan_set = RecipeSet::from_json(
+        r#"{
+            "pickaxe": {"Category": "Crafting", "Ingredients": [{"Item": "iron_ingot", "Count": 2}, {"Item": "stick"}]},
+            "iron_ingot": {"Category": "Furnace", "Ingredients": [{"Item": "raw_iron"}]},
+            "stick": {"Category": "Crafting", "Ingredients": [{"Item": "plank", "Count": 2}]},
+            "plank": {"Category": "Crafting", "Output": 4, "Ingredients": [{"Item": "log"}]},
+            "raw_iron": {"Ingredients": []},
+            "log": {"Ingredients": []}
+        }"#,
+    )
+    .unwrap();
+
+    let plan_root = tree::build("pickaxe", 1, &plan_set, &limits);
+    let step_plan = plan::build(&plan_root, &plan_set);
+    check!(step_plan.step_count == 4, "plan: vier craft-stappen");
+    check!(step_plan.base.len() == 2, "plan: twee basis-materialen");
+    check!(
+        step_plan.base.iter().any(|item| item.name == "raw_iron" && item.quantity == 2),
+        "plan: basis-telling (2 raw iron)"
+    );
+    check!(step_plan.machines.len() == 2, "plan: twee machines");
+    check!(step_plan.machines[0].machine == "Furnace", "plan: smelten vóór crafting");
+
+    let crafting = step_plan
+        .machines
+        .iter()
+        .find(|block| block.machine == "Crafting")
+        .expect("crafting block");
+    check!(crafting.steps.len() == 3, "plan: crafting-blok heeft drie stappen");
+    check!(crafting.steps.last().unwrap().name == "pickaxe", "plan: eindproduct achteraan");
+
+    let plank_step = crafting.steps.iter().find(|step| step.name == "plank").unwrap();
+    check!(
+        plank_step.crafts == 1 && plank_step.ingredients[0].1 == 1,
+        "plan: 2 planken bij Output 4 = 1 beurt, 1 log"
+    );
+
+    let iron_step = step_plan.machines[0]
+        .steps
+        .iter()
+        .find(|step| step.name == "iron_ingot")
+        .unwrap();
+    check!(
+        iron_step.ingredients[0] == ("raw_iron".to_string(), 2),
+        "plan: ingredienten × beurten"
+    );
+
+    let plan_text = plan::text(&step_plan, &names);
+    check!(
+        plan_text.contains(&lang::t("plan.base"))
+            && plan_text.contains("EINDPRODUCT")
+            && !plan_text.contains('‽'),
+        "plan: tekst heeft basis en eindproduct"
+    );
+    check!(
+        plan_text.find("Furnace").unwrap() < plan_text.find("Crafting").unwrap(),
+        "plan: machinevolgorde in de tekst"
+    );
+
+    let cycle_plan = plan::build(&tree::build("a", 1, &cycle_set, &limits), &cycle_set);
+    check!(
+        !plan::text(&cycle_plan, &names).is_empty(),
+        "plan: een kringetje geeft nog een plan"
+    );
+
+    let cut_plan = plan::build(&tree::build("c0", 1, &chain_set, &limits), &chain_set);
+    check!(
+        cut_plan.cut_count > 0 && plan::text(&cut_plan, &names).contains(&lang::t("plan.cut.advice")),
+        "plan: afgekapte tak wordt gemeld"
+    );
+
+    // ---------- layers (RecipeLayers) ----------
+    check!(layers::classify("jar-JSON thermal") == layers::Layer::Base, "laag: jar-JSON is basis");
+    check!(layers::classify("") == layers::Layer::Base, "laag: lege bron is basis");
+    check!(layers::classify("overlay") == layers::Layer::Base, "laag: overlay is basis");
+    check!(layers::classify("runtime:jei") == layers::Layer::Dump, "laag: runtime is dump");
+    check!(layers::classify("scripts/mythic/runes.zs") == layers::Layer::Pack, "laag: script is pack");
+
+    let layered = RecipeSet::from_json(
+        r#"{
+            "a": {"Source": "jar-JSON x", "Ingredients": []},
+            "b": {"Source": "runtime:d", "Ingredients": []},
+            "c": {"Source": "scripts/x.zs", "Ingredients": []}
+        }"#,
+    )
+    .unwrap();
+    let layer_counts = layers::counts(&layered);
+    check!(
+        layer_counts == layers::LayerCounts { base: 1, dump: 1, pack: 1, user: 0 },
+        "laag: verdeling per laag"
+    );
+    check!(
+        layers::summary(&layer_counts).contains('📦') && layers::summary(&layer_counts).contains('🧩'),
+        "laag: samenvatting"
+    );
+    check!(
+        lang::format("plan.machine", &["X", "3"]).contains("X") && lang::format("plan.machine", &["X", "3"]).contains("3 stap"),
+        "taal: placeholders gevuld"
     );
 
     // ---------- the sample that ships with the repo ----------
