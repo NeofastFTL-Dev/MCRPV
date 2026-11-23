@@ -55,9 +55,97 @@ jobs:
           path: out/*
           if-no-files-found: error
 
+  linux-port:
+    name: Linux build (linux branch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: linux
+          path: src
+
+      - name: GUI libraries
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgl1-mesa-dev libxkbcommon-dev libwayland-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo build --release
+        working-directory: src/rust
+        run: cargo build --release --locked
+
+      - name: Check the binary
+        working-directory: src/rust
+        run: |
+          set -euo pipefail
+          ftype=$(file -b target/release/mcrpv)
+          echo "$ftype"
+          case "$ftype" in
+            *ELF*) ;;
+            *) echo "not a Linux ELF binary"; exit 1 ;;
+          esac
+
+      - name: Name the binary after its own version
+        working-directory: src/rust
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          test -n "$version"
+          cp target/release/mcrpv "mcrpv-${version}-linux-x86_64"
+          ls -l "mcrpv-${version}-linux-x86_64"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcrpv-rust-linux
+          path: src/rust/mcrpv-*
+          if-no-files-found: error
+
+  macos-port:
+    name: macOS build (macos branch)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: macos
+          path: src
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo build --release
+        working-directory: src/rust
+        run: cargo build --release --locked
+
+      - name: Check the binary
+        working-directory: src/rust
+        run: |
+          set -euo pipefail
+          ftype=$(file -b target/release/mcrpv)
+          echo "$ftype"
+          case "$ftype" in
+            *Mach-O*) ;;
+            *) echo "not a macOS Mach-O binary"; exit 1 ;;
+          esac
+
+      - name: Name the binary after its own version
+        working-directory: src/rust
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          test -n "$version"
+          cp target/release/mcrpv "mcrpv-${version}-macos"
+          ls -l "mcrpv-${version}-macos"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcrpv-rust-macos
+          path: src/rust/mcrpv-*
+          if-no-files-found: error
+
   release:
     name: Release
-    needs: windows-x64
+    needs: [windows-x64, linux-port, macos-port]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -66,23 +154,41 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: mcrpv-win-x64
-          path: dist
+          path: dist/win
+      - uses: actions/download-artifact@v4
+        with:
+          name: mcrpv-rust-linux
+          path: dist/linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: mcrpv-rust-macos
+          path: dist/macos
 
-      - name: Package the exe with its recipes.json
+      - name: Collect every build for this tag
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          test -s dist/MCRPV.exe
-          (cd dist && zip -9 "../MCRPV-${version}-win-x64.zip" ./*)
-          ls -l "MCRPV-${version}-win-x64.zip"
+          mkdir -p out
+          test -s dist/win/MCRPV.exe
+          (cd dist/win && zip -9 "../../out/MCRPV-${version}-win-x64.zip" ./*)
+          cp dist/linux/mcrpv-* out/
+          cp dist/macos/mcrpv-* out/
+          chmod 755 out/mcrpv-*
+          ls -l out
 
       - uses: softprops/action-gh-release@v2
         with:
-          files: MCRPV-*.zip
+          files: out/*
           name: MCRPV ${{ github.ref_name }}
           generate_release_notes: true
           body: |
-            Windows x86_64 WPF build: self-contained single file, so no .NET runtime has to be
-            installed. Unzip it somewhere and run `MCRPV.exe`; `recipes.json` next to it is the
-            bundled sample. The app also reads a JEIExporter dump or a Minecraft instance, as the
-            README describes.
+            Every build of MCRPV for this tag:
+
+            * `MCRPV-<tag>-win-x64.zip` - the WPF app from `main`, self-contained single file:
+              unzip it anywhere and run `MCRPV.exe`. `recipes.json` next to it is the bundled
+              sample.
+            * `mcrpv-<version>-linux-x86_64` and `mcrpv-<version>-macos` - the native Rust/egui
+              port from the `linux` and `macos` branches, at that port's own version. It covers the
+              recipe tree, the base to end plan, the machine picker, recipe layers, search,
+              languages and settings; JEI bookmarks, the shopping list, the pack index and the PNG
+              export are still only in the WPF app.
